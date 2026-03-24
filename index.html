@@ -564,14 +564,16 @@ header{background:var(--surface);border-bottom:1px solid var(--border);height:56
   .stats{grid-template-columns:repeat(4,1fr);}
 }
 
-/* BOTTOM NAV */
-.bnav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);padding:6px 0 14px;z-index:200;}
+/* BOTTOM NAV - horizontal scrollbar */
+.bnav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);z-index:200;padding-bottom:0;}
+.bnav-scroll{display:flex;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:6px 4px 14px 4px;gap:2px;}
+.bnav-scroll::-webkit-scrollbar{display:none;}
 @media(max-width:768px){
-  .bnav{display:flex;}
+  .bnav{display:block;}
   body{padding-bottom:76px;}
   .main{padding:12px 12px 20px 12px;}
 }
-.bni{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;color:var(--t2);font-size:10px;padding:5px 0;transition:color .15s;}
+.bni{flex:0 0 auto;min-width:60px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;color:var(--t2);font-size:10px;padding:5px 8px;transition:color .15s;white-space:nowrap;}
 .bni .nico{font-size:20px;width:auto;}
 .bni.active{color:var(--accent);}
 
@@ -1021,12 +1023,23 @@ header{background:var(--surface);border-bottom:1px solid var(--border);height:56
 
 <!-- BOTTOM NAV -->
 <nav class="bnav">
-  <div class="bni active" data-page="dashboard"><span class="nico">🏗</span>Start</div>
-  <div class="bni" data-page="laufend"><span class="nico">🔵</span>Aktiv</div>
-  <div class="bni" data-page="controlling"><span class="nico">📊</span>Controlling</div>
-  <div class="bni" data-page="rechnungen"><span class="nico">🧾</span>Rechnungen</div>
-  <div class="bni" data-page="az-erfassen"><span class="nico">⏱</span>Zeiten</div>
-  <div class="bni" data-page="print"><span class="nico">🖨</span>Export</div>
+  <div class="bnav-scroll">
+    <div class="bni active" data-page="dashboard"><span class="nico">🏗</span>Start</div>
+    <div class="bni" data-page="laufend"><span class="nico">🔵</span>Laufend</div>
+    <div class="bni" data-page="abgeschlossen"><span class="nico">✅</span>Abgeschlossen</div>
+    <div class="bni" data-page="angebote"><span class="nico">📋</span>Angebote</div>
+    <div class="bni" data-page="anfragen"><span class="nico">💬</span>Anfragen</div>
+    <div class="bni" data-page="rechnungen"><span class="nico">🧾</span>Rechnungen</div>
+    <div class="bni" data-page="rech-projekt"><span class="nico">🏗</span>Rg./Projekt</div>
+    <div class="bni" data-page="az-erfassen"><span class="nico">⏱</span>Zeiten</div>
+    <div class="bni" data-page="az-woche"><span class="nico">📅</span>Woche</div>
+    <div class="bni" data-page="az-auswertung"><span class="nico">📊</span>Auswertung</div>
+    <div class="bni" data-page="az-mitarbeiter"><span class="nico">👷</span>Mitarbeiter</div>
+    <div class="bni" data-page="allg-todos"><span class="nico">✅</span>To-Dos</div>
+    <div class="bni" data-page="material"><span class="nico">🧱</span>Material</div>
+    <div class="bni" data-page="controlling"><span class="nico">📊</span>Controlling</div>
+    <div class="bni" data-page="print"><span class="nico">🖨</span>Export</div>
+  </div>
 </nav>
 
 <!-- ══ MODALS ══ -->
@@ -1437,6 +1450,9 @@ function goPage(id,el){
   document.querySelectorAll('.ni,.bni').forEach(n=>n.classList.remove('active'));
   if(el) el.classList.add('active');
   else document.querySelectorAll(`[data-page="${id}"]`).forEach(n=>n.classList.add('active'));
+  // Aktives Bottom-Nav-Item in Sicht scrollen
+  const activeBni = document.querySelector(`.bni[data-page="${id}"]`);
+  if(activeBni) activeBni.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
 
   if(id==='dashboard') renderDashboard();
   if(id==='laufend') renderProjList('laufend');
