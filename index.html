@@ -4500,18 +4500,25 @@ async function showLoginScreen(){
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('main-app').style.display='none';
   document.getElementById('ma-app').style.display='none';
-  const hash = await getAdminHash();
-  if(!hash){
-    document.getElementById('login-pin-view').style.display='none';
-    document.getElementById('login-admin-view').style.display='none';
-    document.getElementById('login-setup-view').style.display='flex';
-  } else {
-    document.getElementById('login-pin-view').style.display='block';
-    document.getElementById('login-admin-view').style.display='none';
-    document.getElementById('login-setup-view').style.display='none';
-  }
+  // Erstmal PIN-View zeigen mit Ladehinweis
+  document.getElementById('login-pin-view').style.display='block';
+  document.getElementById('login-admin-view').style.display='none';
+  document.getElementById('login-setup-view').style.display='none';
+  document.getElementById('login-prompt').textContent='⏳ Verbinde …';
   pinBuffer='';
   updatePinDots();
+  // Aus Supabase laden (async)
+  const hash = await getAdminHash();
+  if(!hash){
+    // Wirklich kein Passwort — Setup anzeigen
+    document.getElementById('login-pin-view').style.display='none';
+    document.getElementById('login-setup-view').style.display='flex';
+  } else {
+    // Passwort vorhanden — PIN-View anzeigen
+    document.getElementById('login-pin-view').style.display='block';
+    document.getElementById('login-setup-view').style.display='none';
+    document.getElementById('login-prompt').textContent='PIN eingeben';
+  }
 }
 
 function showAdminLogin(){
@@ -4739,7 +4746,7 @@ function deleteMaZeit(zid, maId){
   );
 }
 
-function initAuth(){
+async function initAuth(){
   // Session prüfen
   const sess=sessionStorage.getItem('bm_session');
   if(sess==='admin'){
@@ -4752,6 +4759,8 @@ function initAuth(){
       if(ma){loginAsMitarbeiter(ma);return;}
     }catch(e){}
   }
+  // Passwort aus Supabase vorladen damit showLoginScreen es sofort hat
+  await getAdminHash();
   showLoginScreen();
 }
 
