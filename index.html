@@ -4464,15 +4464,44 @@ function hashPin(pin){
   return String(h);
 }
 
-function getAdminHash(){ return localStorage.getItem('bm_admin_pw')||''; }
-function setAdminHash(pw){ localStorage.setItem('bm_admin_pw', hashPin(pw)); }
+// Admin-Passwort in Supabase speichern (geräteübergreifend)
+async function getAdminHash(){
+  // Zuerst lokal prüfen (schneller)
+  const local = localStorage.getItem('bm_admin_pw');
+  if(local) return local;
+  // Dann aus Supabase laden
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/settings?key=eq.admin_pw&select=value`, {headers:sbHeaders});
+    if(res.ok){
+      const rows = await res.json();
+      if(rows.length){
+        localStorage.setItem('bm_admin_pw', rows[0].value);
+        return rows[0].value;
+      }
+    }
+  } catch(e){}
+  return '';
+}
 
-function showLoginScreen(){
+async function setAdminHash(pw){
+  const hash = hashPin(pw);
+  localStorage.setItem('bm_admin_pw', hash);
+  // In Supabase speichern
+  try {
+    await fetch(`${SB_URL}/rest/v1/settings`, {
+      method:'POST',
+      headers:{...sbHeaders,'Prefer':'resolution=merge-duplicates'},
+      body:JSON.stringify({key:'admin_pw', value:hash})
+    });
+  } catch(e){ console.warn('Supabase settings save failed:', e); }
+}
+
+async function showLoginScreen(){
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('main-app').style.display='none';
   document.getElementById('ma-app').style.display='none';
-  // Prüfe ob Admin-PW gesetzt
-  if(!getAdminHash()){
+  const hash = await getAdminHash();
+  if(!hash){
     document.getElementById('login-pin-view').style.display='none';
     document.getElementById('login-admin-view').style.display='none';
     document.getElementById('login-setup-view').style.display='flex';
@@ -4498,20 +4527,23 @@ function showPinLogin(){
   document.getElementById('admin-login-error').textContent='';
 }
 
-function doSetupAdmin(){
+async function doSetupAdmin(){
   const pw1=document.getElementById('setup-pw1').value;
   const pw2=document.getElementById('setup-pw2').value;
   const err=document.getElementById('setup-error');
   if(pw1.length<4){err.textContent='Mindestens 4 Zeichen.';return;}
   if(pw1!==pw2){err.textContent='Passwörter stimmen nicht überein.';return;}
-  setAdminHash(pw1);
+  err.textContent='⏳ Wird gespeichert …';
+  await setAdminHash(pw1);
   loginAsAdmin();
 }
 
-function doAdminLogin(){
+async function doAdminLogin(){
   const pw=document.getElementById('admin-pw-input').value;
   const err=document.getElementById('admin-login-error');
-  if(hashPin(pw)===getAdminHash()){
+  err.textContent='⏳ Prüfe …';
+  const hash = await getAdminHash();
+  if(hashPin(pw)===hash){
     loginAsAdmin();
   } else {
     err.textContent='Falsches Passwort.';
