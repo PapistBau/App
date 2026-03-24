@@ -587,7 +587,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);height:56
 <div id="login-screen" style="display:flex;position:fixed;inset:0;z-index:9999;background:var(--bg);flex-direction:column;align-items:center;justify-content:center;padding:max(24px,env(safe-area-inset-top)) 24px max(24px,env(safe-area-inset-bottom)) 24px;overflow-y:auto;">
   <div style="width:100%;max-width:360px">
     <div style="text-align:center;margin-bottom:32px">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:38px;letter-spacing:3px;color:var(--accent)">PAPIST BAU</div>
+      <div id="login-logo-tap" style="font-family:'Bebas Neue',sans-serif;font-size:38px;letter-spacing:3px;color:var(--accent);cursor:default;user-select:none" onclick="secretTap()">PAPIST BAU</div>
       <div style="font-size:13px;color:var(--t2);margin-top:4px">Management App</div>
     </div>
     <!-- PIN View -->
@@ -606,8 +606,9 @@ header{background:var(--surface);border-bottom:1px solid var(--border);height:56
         <div></div><button class="pin-btn" onclick="pinPress(0)">0</button><button class="pin-btn" onclick="pinPress('del')">⌫</button>
       </div>
       <div id="login-error" style="color:var(--red);font-size:13px;text-align:center;min-height:20px"></div>
+      <!-- Admin-Button versteckt — 5x auf Titel tippen zum Aktivieren -->
       <div style="text-align:center;margin-top:20px;padding-bottom:20px">
-        <button onclick="showAdminLogin()" style="background:var(--card);border:1px solid var(--border);border-radius:12px;color:var(--t2);font-size:14px;cursor:pointer;padding:14px 24px;width:100%;max-width:260px">
+        <button id="admin-login-btn" onclick="showAdminLogin()" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:12px;color:var(--t2);font-size:14px;cursor:pointer;padding:14px 24px;width:100%;max-width:260px">
           🔑 Als Admin anmelden
         </button>
       </div>
@@ -4460,6 +4461,25 @@ function openMatPdf(id){
 // ════════════════════════════════════
 let pinBuffer = '';
 
+// Geheimer Admin-Zugang: 5x auf "PAPIST BAU" tippen
+let secretTapCount = 0;
+let secretTapTimer = null;
+function secretTap(){
+  secretTapCount++;
+  clearTimeout(secretTapTimer);
+  if(secretTapCount >= 5){
+    secretTapCount = 0;
+    document.getElementById('admin-login-btn').style.display='block';
+    // Nach 30 Sek wieder verstecken
+    setTimeout(()=>{
+      const btn=document.getElementById('admin-login-btn');
+      if(btn) btn.style.display='none';
+    }, 30000);
+  } else {
+    secretTapTimer = setTimeout(()=>secretTapCount=0, 2000);
+  }
+}
+
 function hashPin(pin){
   // Einfacher Hash (kein Crypto nötig für 4-stellige PIN)
   let h = 0;
@@ -4503,10 +4523,11 @@ async function showLoginScreen(){
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('main-app').style.display='none';
   document.getElementById('ma-app').style.display='none';
-  // Immer PIN-View zeigen während geladen wird
+  // Immer PIN-View zeigen — Admin-Button versteckt
   document.getElementById('login-pin-view').style.display='block';
   document.getElementById('login-admin-view').style.display='none';
   document.getElementById('login-setup-view').style.display='none';
+  document.getElementById('admin-login-btn').style.display='none';
   document.getElementById('login-prompt').textContent='⏳ Verbinde …';
   document.getElementById('login-sub').textContent='';
   pinBuffer='';
@@ -4514,25 +4535,18 @@ async function showLoginScreen(){
 
   const hash = await getAdminHash();
   if(!hash){
-    // Kein Passwort in Supabase → Setup nur wenn lokal noch nie eingerichtet
-    // Sicherheit: Setup-Screen nur wenn explizit via URL-Parameter ?setup=1
+    // Kein Passwort → Setup nur mit ?setup=1
     const isSetup = new URLSearchParams(window.location.search).get('setup')==='1';
     if(isSetup){
       document.getElementById('login-pin-view').style.display='none';
       document.getElementById('login-setup-view').style.display='flex';
     } else {
-      // Normaler Benutzer: nur Admin-Login anzeigen
-      document.getElementById('login-pin-view').style.display='none';
-      document.getElementById('login-admin-view').style.display='block';
-      document.getElementById('admin-login-error').textContent='';
-      // Hinweis: Ersten Start über ?setup=1 machen
-      document.getElementById('admin-login-error').textContent='Noch kein Passwort gesetzt. Öffne die App mit ?setup=1 am Ende der URL.';
-      document.getElementById('admin-login-error').style.color='var(--accent)';
+      document.getElementById('login-prompt').textContent='PIN eingeben';
+      document.getElementById('login-sub').textContent='Mitarbeiter-PIN';
     }
   } else {
-    document.getElementById('login-pin-view').style.display='block';
     document.getElementById('login-prompt').textContent='PIN eingeben';
-    document.getElementById('login-sub').textContent='Mitarbeiter-PIN oder Admin-Passwort';
+    document.getElementById('login-sub').textContent='Mitarbeiter-PIN';
   }
 }
 
@@ -4762,19 +4776,21 @@ function deleteMaZeit(zid, maId){
 }
 
 async function initAuth(){
-  // Session prüfen
   const sess=sessionStorage.getItem('bm_session');
-  if(sess==='admin'){
-    loginAsAdmin(); return;
-  }
-  if(sess){
+  // Mitarbeiter-Session wiederherstellen
+  if(sess && sess!=='admin'){
     try{
       const u=JSON.parse(sess);
       const ma=workers.find(w=>String(w.id)===String(u.id));
       if(ma){loginAsMitarbeiter(ma);return;}
     }catch(e){}
   }
-  // Passwort aus Supabase vorladen damit showLoginScreen es sofort hat
+  // Admin-Session nur wiederherstellen wenn explizit gewünscht
+  // (sessionStorage leert sich beim Tab schließen — sicher genug)
+  if(sess==='admin'){
+    loginAsAdmin(); return;
+  }
+  // Passwort vorladen
   await getAdminHash();
   showLoginScreen();
 }
