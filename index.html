@@ -656,7 +656,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);height:56
     <button class="btn btn-ghost btn-sm" onclick="doLogout()">🚪 Abmelden</button>
   </div>
   <!-- Scrollbarer Content — fixer Bereich zwischen Header und unten -->
-  <div id="ma-zeit-content" style="position:fixed;top:56px;left:0;right:0;bottom:0;overflow-y:scroll;-webkit-overflow-scrolling:touch;padding:16px;box-sizing:border-box;"></div>
+  <div id="ma-zeit-content" style="position:fixed;top:56px;left:0;right:0;bottom:0;overflow-y:scroll;-webkit-overflow-scrolling:touch;padding:16px 16px 40px 16px;box-sizing:border-box;"></div>
 </div>
 
 <!-- Hauptapp (Admin) -->
@@ -4764,7 +4764,7 @@ function renderMaZeiterfassung(maId, filterMonth){
         <span style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--accent)">${totalH} h gesamt</span>
       </div>`:''}
     </div>
-    <div style="height:20px"></div>
+    <div style="height:60px"></div>
   `;
 }
 
