@@ -1530,9 +1530,14 @@ async function trackDeleted(table, id){
   }catch(e){}
 }
 
+// Timestamp für geänderte Einträge - wird beim Laden aus Cloud entfernt
+const SYNC_SESSION = Date.now(); // Einmalige Session-ID
+
+function stampItem(item){
+  return {...item, _syncSession: SYNC_SESSION};
+}
+
 function saveAll(){
-  // Timestamp auf alle geänderten Daten setzen
-  const now = Date.now();
   localStorage.setItem('bm_proj',      JSON.stringify(projects));
   localStorage.setItem('bm_ma',        JSON.stringify(workers));
   localStorage.setItem('bm_zeit',      JSON.stringify(zeiten));
@@ -1542,7 +1547,7 @@ function saveAll(){
   localStorage.setItem('bm_kat',       JSON.stringify(kategorien));
   localStorage.setItem('bm_allgtodos', JSON.stringify(allgTodos));
   localStorage.setItem('bm_material',  JSON.stringify(material));
-  localStorage.setItem('bm_last_save', String(now));
+  localStorage.setItem('bm_last_save', String(Date.now()));
   clearTimeout(syncTimer);
   syncTimer = setTimeout(syncToCloud, 1500);
 }
@@ -1819,7 +1824,7 @@ function saveProject(){
     odFoto:document.getElementById('f-od-foto').value.trim(),
     notes:document.getElementById('f-notes').value.trim(),
   };
-  if(editProjId){const i=projects.findIndex(x=>String(x.id)===String(editProjId));if(i>-1)projects[i]=p;}
+  p._syncSession=SYNC_SESSION; if(editProjId){const i=projects.findIndex(x=>String(x.id)===String(editProjId));if(i>-1)projects[i]=p;}
   else projects.unshift(p);
   closeModal('modal-proj');
   saveAll();renderDashboard();
@@ -2363,7 +2368,7 @@ www.papist-bau.de`);
 
 function toggleZeitGesperrt(id){
   const p=projects.find(x=>x.id===id); if(!p) return;
-  p.zeitGesperrt = !p.zeitGesperrt;
+  p.zeitGesperrt = !p.zeitGesperrt; p._syncSession=SYNC_SESSION;
   saveAll();
   openDetail(id);
   toast(p.zeitGesperrt ? '🔒 Zeiterfassung gesperrt' : '🔓 Zeiterfassung freigegeben');
@@ -2744,7 +2749,7 @@ function saveTodo(){
     due:document.getElementById('td-due').value,
     done:editTodoId?((todos.find(x=>String(x.id)===String(editTodoId))||{}).done||false):false,
   };
-  if(editTodoId){const i=todos.findIndex(x=>String(x.id)===String(editTodoId));if(i>-1)todos[i]=t;}
+  t._syncSession=SYNC_SESSION; if(editTodoId){const i=todos.findIndex(x=>String(x.id)===String(editTodoId));if(i>-1)todos[i]=t;}
   else todos.push(t);
   closeModal('modal-todo');
   saveAll();
@@ -2758,7 +2763,7 @@ function saveTodo(){
 
 function toggleTodo(id,projId){
   const t=todos.find(x=>x.id===id);if(!t)return;
-  t.done=!t.done;
+  t.done=!t.done; t._syncSession=SYNC_SESSION;
   saveAll();openDetail(projId);
 }
 
@@ -3415,7 +3420,7 @@ function saveZeit(){
     zeit:`${von} – ${bis}`,
     pause, notiz:document.getElementById('z-notiz').value.trim()
   };
-  if(editZeitId){const i=zeiten.findIndex(x=>String(x.id)===String(editZeitId));if(i>-1)zeiten[i]=z;}
+  z._syncSession=SYNC_SESSION; if(editZeitId){const i=zeiten.findIndex(x=>String(x.id)===String(editZeitId));if(i>-1)zeiten[i]=z;}
   else zeiten.unshift(z);
   closeModal('modal-zeit');saveAll();renderZeitList();
 }
@@ -4527,7 +4532,7 @@ function saveKat(){
   if(!name){alert('Bitte Namen eingeben.');return;}
   const k={id:editKatId||Date.now(),name,color:selectedKatColor};
   if(editKatId){const i=kategorien.findIndex(x=>String(x.id)===String(editKatId));if(i>-1)kategorien[i]=k;}
-  else kategorien.push(k);
+  else { k._syncSession=SYNC_SESSION; kategorien.push(k); }
   closeModal('modal-kat');
   saveKatData();renderAllgTodos();
 }
@@ -4574,7 +4579,7 @@ function saveAllgTodo(){
     notiz:document.getElementById('at-notiz').value.trim(),
     done:editAllgTodoId?(allgTodos.find(x=>x.id===editAllgTodoId)?.done||false):false,
   };
-  if(editAllgTodoId){const i=allgTodos.findIndex(x=>String(x.id)===String(editAllgTodoId));if(i>-1)allgTodos[i]=t;}
+  t._syncSession=SYNC_SESSION; if(editAllgTodoId){const i=allgTodos.findIndex(x=>String(x.id)===String(editAllgTodoId));if(i>-1)allgTodos[i]=t;}
   else allgTodos.push(t);
   closeModal('modal-allgtodo');
   saveKatData();renderAllgTodos();
@@ -5451,7 +5456,7 @@ function saveMaZeit(maId){
     pause: pause,
     notiz: document.getElementById('ma-z-notiz').value.trim()
   };
-  zeiten.unshift(z);
+  z._syncSession=SYNC_SESSION; zeiten.unshift(z);
   saveAll();
   msg.style.color='var(--green)';
   msg.textContent=`✅ ${std.toString().replace('.',',')} Stunden gespeichert!`;
@@ -5530,24 +5535,42 @@ async function sbDeleteMissing(table, localIds){
 async function syncToCloud(){
   setSyncStatus('saving');
   try{
-    // Vor dem Sync: gelöschte IDs aus Supabase holen damit wir sie nicht wieder hochladen
-    const deletedCheck = await fetch(`${SB_URL}/rest/v1/deleted_ids?select=id`,{headers:sbHeaders}).catch(()=>null);
+    // Gelöschte IDs holen
     const deletedIds = new Set();
-    if(deletedCheck && deletedCheck.ok){
-      const rows = await deletedCheck.json();
-      rows.forEach(r=>deletedIds.add(r.id));
-    }
-    const notDeleted = (table, items) => items.filter(x=>!deletedIds.has(`${table}:${String(x.id)}`));
+    try{
+      const delRes = await fetch(`${SB_URL}/rest/v1/deleted_ids?select=id`,{headers:sbHeaders});
+      if(delRes.ok){ const rows = await delRes.json(); rows.forEach(r=>deletedIds.add(r.id)); }
+    }catch(e){}
 
-    if(projects.length)   await sbUpsert('projects',   notDeleted('projects',   projects));
-    if(workers.length)    await sbUpsert('workers',    notDeleted('workers',    workers));
-    if(zeiten.length)     await sbUpsert('zeiten',     notDeleted('zeiten',     zeiten));
-    if(rechnungen.length) await sbUpsert('rechnungen', notDeleted('rechnungen', rechnungen));
-    if(todos.length)      await sbUpsert('todos',      notDeleted('todos',      todos));
-    if(kategorien.length) await sbUpsert('kategorien', notDeleted('kategorien', kategorien));
-    if(allgTodos.length)  await sbUpsert('allgtodos',  notDeleted('allgtodos',  allgTodos));
-    if(material.length)   await sbUpsert('material',   notDeleted('material',   material));
-    if(fotos.length)      await sbUpsert('fotos',      notDeleted('fotos',      fotos));
+    // Nur Einträge hochladen die:
+    // 1. In dieser Session geändert wurden (_syncSession === SYNC_SESSION)
+    // 2. Nicht in deleted_ids sind
+    const toSync = (table, items) => items.filter(x=>
+      x._syncSession === SYNC_SESSION &&
+      !deletedIds.has(`${table}:${String(x.id)}`)
+    );
+
+    // Einträge ohne _syncSession nicht hochladen (= aus Cloud geladen, unverändert)
+    const p  = toSync('projects',   projects);
+    const w  = toSync('workers',    workers);
+    const z  = toSync('zeiten',     zeiten);
+    const r  = toSync('rechnungen', rechnungen);
+    const t  = toSync('todos',      todos);
+    const k  = toSync('kategorien', kategorien);
+    const ag = toSync('allgtodos',  allgTodos);
+    const m  = toSync('material',   material);
+    const f  = toSync('fotos',      fotos);
+
+    if(p.length)  await sbUpsert('projects',   p);
+    if(w.length)  await sbUpsert('workers',    w);
+    if(z.length)  await sbUpsert('zeiten',     z);
+    if(r.length)  await sbUpsert('rechnungen', r);
+    if(t.length)  await sbUpsert('todos',      t);
+    if(k.length)  await sbUpsert('kategorien', k);
+    if(ag.length) await sbUpsert('allgtodos',  ag);
+    if(m.length)  await sbUpsert('material',   m);
+    if(f.length)  await sbUpsert('fotos',      f);
+
     setSyncStatus('ok');
   }catch(e){
     console.warn('Sync error:',e);
@@ -5581,14 +5604,16 @@ async function initFromCloud(){
 
     // Daten laden und gefiltert setzen
     const cloudData = await sbLoadAll();
-    projects    = notDel('projects',   cloudData.projects);
-    workers     = notDel('workers',    cloudData.workers);
-    zeiten      = notDel('zeiten',     cloudData.zeiten);
-    rechnungen  = notDel('rechnungen', cloudData.rechnungen);
-    todos       = notDel('todos',      cloudData.todos);
-    kategorien  = cloudData.kategorien || [];
-    allgTodos   = notDel('allgtodos',  cloudData.allgtodos);
-    material    = notDel('material',   cloudData.material);
+    const strip = items => (items||[]).map(x=>{ const c={...x}; delete c._syncSession; return c; });
+
+    projects    = strip(notDel('projects',   cloudData.projects));
+    workers     = strip(notDel('workers',    cloudData.workers));
+    zeiten      = strip(notDel('zeiten',     cloudData.zeiten));
+    rechnungen  = strip(notDel('rechnungen', cloudData.rechnungen));
+    todos       = strip(notDel('todos',      cloudData.todos));
+    kategorien  = strip(cloudData.kategorien || []);
+    allgTodos   = strip(notDel('allgtodos',  cloudData.allgtodos));
+    material    = strip(notDel('material',   cloudData.material));
     if(cloudData.fotos && cloudData.fotos.length) fotos = cloudData.fotos;
 
     localStorage.setItem('bm_proj',      JSON.stringify(projects));
