@@ -1138,12 +1138,21 @@ header{background:var(--surface);border-bottom:1px solid var(--border);height:56
 <div class="overlay" id="modal-zeit" style="display:none" onclick="if(event.target===this)closeModal('modal-zeit')">
 <div class="modal">
   <div class="mttl" id="zeit-mttl">Stunden buchen</div>
-  <div class="fg"><label class="fl">Datum *</label><input type="date" class="fi" id="z-datum"></div>
-  <div class="fg"><label class="fl">Mitarbeiter *</label><select class="fs" id="z-ma"></select></div>
+  <div class="frow">
+    <div class="fg"><label class="fl">Datum *</label><input type="date" class="fi" id="z-datum"></div>
+    <div class="fg"><label class="fl">Mitarbeiter *</label><select class="fs" id="z-ma"></select></div>
+  </div>
   <div class="fg"><label class="fl">Baustelle *</label><select class="fs" id="z-bs"></select></div>
   <div class="frow">
-    <div class="fg"><label class="fl">Stunden *</label><input type="number" class="fi" id="z-std" placeholder="8" min="0.5" max="24" step="0.5"></div>
-    <div class="fg"><label class="fl">Von – Bis</label><input class="fi" id="z-zeit" placeholder="07:00 – 15:30"></div>
+    <div class="fg"><label class="fl">Von *</label><input type="time" class="fi" id="z-von" oninput="calcZeitStunden()"></div>
+    <div class="fg"><label class="fl">Bis *</label><input type="time" class="fi" id="z-bis" oninput="calcZeitStunden()"></div>
+  </div>
+  <div class="frow">
+    <div class="fg"><label class="fl">Pause (Minuten)</label><input type="number" class="fi" id="z-pause" placeholder="30" min="0" max="480" step="5" value="0" oninput="calcZeitStunden()"></div>
+    <div class="fg"><label class="fl">Stunden (berechnet)</label>
+      <div id="z-std-display" style="background:var(--card2);border:1px solid var(--border);border-radius:var(--r2);padding:10px 14px;font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--accent);text-align:center">–</div>
+      <input type="hidden" id="z-std">
+    </div>
   </div>
   <div class="fg"><label class="fl">Notiz</label><input class="fi" id="z-notiz" placeholder="z.B. Fundament gießen"></div>
   <div class="mfooter">
@@ -2948,6 +2957,22 @@ function delMA(id){
 // ════════════════════════════════════
 // ARBEITSZEIT
 // ════════════════════════════════════
+function calcZeitStunden(){
+  const von = document.getElementById('z-von')?.value;
+  const bis = document.getElementById('z-bis')?.value;
+  const pause = parseInt(document.getElementById('z-pause')?.value)||0;
+  if(!von||!bis) return;
+  const [vh,vm] = von.split(':').map(Number);
+  const [bh,bm] = bis.split(':').map(Number);
+  let totalMin = (bh*60+bm) - (vh*60+vm);
+  if(totalMin < 0) totalMin += 24*60;
+  const nettoMin = Math.max(0, totalMin - pause);
+  const std = Math.round(nettoMin/60*100)/100;
+  document.getElementById('z-std').value = std;
+  const display = document.getElementById('z-std-display');
+  if(display) display.textContent = std > 0 ? std.toString().replace('.',',')+' h' : '–';
+}
+
 function openZeitModal(editId){
   editZeitId=editId||null;
   document.getElementById('zeit-mttl').textContent=editId?'Zeit bearbeiten':'Stunden buchen';
@@ -2957,10 +2982,31 @@ function openZeitModal(editId){
   bs.innerHTML='<option value="">— Projekt wählen —</option>'+projects.filter(p=>p.typ==='laufend'||p.typ==='abgeschlossen').map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
   if(editId){
     const z=zeiten.find(x=>x.id===editId);
-    if(z){document.getElementById('z-datum').value=z.datum;ms.value=z.maId;bs.value=z.projId;document.getElementById('z-std').value=z.std;document.getElementById('z-zeit').value=z.zeit||'';document.getElementById('z-notiz').value=z.notiz||'';}
+    if(z){
+      document.getElementById('z-datum').value=z.datum;
+      ms.value=z.maId; bs.value=z.projId;
+      document.getElementById('z-std').value=z.std;
+      document.getElementById('z-std-display').textContent=z.std+' h';
+      document.getElementById('z-notiz').value=z.notiz||'';
+      document.getElementById('z-pause').value=z.pause||0;
+      // Von/Bis aus z.zeit parsen falls vorhanden
+      if(z.zeit && z.zeit.includes('–')){
+        const parts = z.zeit.split('–').map(s=>s.trim());
+        if(parts[0]) document.getElementById('z-von').value=parts[0];
+        if(parts[1]) document.getElementById('z-bis').value=parts[1];
+      } else {
+        document.getElementById('z-von').value='';
+        document.getElementById('z-bis').value='';
+      }
+    }
   } else {
     document.getElementById('z-datum').value=today();
-    ['z-std','z-zeit','z-notiz'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('z-von').value='';
+    document.getElementById('z-bis').value='';
+    document.getElementById('z-pause').value='0';
+    document.getElementById('z-std').value='';
+    document.getElementById('z-std-display').textContent='–';
+    document.getElementById('z-notiz').value='';
   }
   document.getElementById('modal-zeit').style.display='flex';
 }
@@ -2969,9 +3015,20 @@ function saveZeit(){
   const datum=document.getElementById('z-datum').value;
   const maId=parseInt(document.getElementById('z-ma').value);
   const projId=parseInt(document.getElementById('z-bs').value);
-  const std=parseFloat(document.getElementById('z-std').value);
-  if(!datum||!maId||!projId||!std){alert('Alle Pflichtfelder ausfüllen.');return;}
-  const z={id:editZeitId||Date.now(),datum,maId,projId,std,zeit:document.getElementById('z-zeit').value.trim(),notiz:document.getElementById('z-notiz').value.trim()};
+  const von=document.getElementById('z-von').value;
+  const bis=document.getElementById('z-bis').value;
+  const pause=parseInt(document.getElementById('z-pause').value)||0;
+  let std=parseFloat(document.getElementById('z-std').value);
+  if(!datum||!maId||!projId){alert('Bitte Datum, Mitarbeiter und Projekt ausfüllen.');return;}
+  if(!von||!bis){alert('Bitte Von und Bis Uhrzeit eintragen.');return;}
+  if(!std||std<=0){calcZeitStunden();std=parseFloat(document.getElementById('z-std').value)||0;}
+  if(std<=0){alert('Arbeitszeit muss größer als 0 sein.');return;}
+  const z={
+    id:editZeitId||Date.now(),
+    datum, maId, projId, std,
+    zeit:`${von} – ${bis}`,
+    pause, notiz:document.getElementById('z-notiz').value.trim()
+  };
   if(editZeitId){const i=zeiten.findIndex(x=>String(x.id)===String(editZeitId));if(i>-1)zeiten[i]=z;}
   else zeiten.unshift(z);
   closeModal('modal-zeit');saveAll();renderZeitList();
@@ -4602,6 +4659,37 @@ async function doAdminLogin(){
   }
 }
 
+// Auto-Logout Timer für Mitarbeiter (3 Minuten)
+let maLogoutTimer = null;
+let maLogoutWarnTimer = null;
+const MA_TIMEOUT = 3 * 60 * 1000; // 3 Minuten
+const MA_WARN    = 2.5 * 60 * 1000; // Warnung nach 2,5 Min
+
+function resetMaLogoutTimer(){
+  clearTimeout(maLogoutTimer);
+  clearTimeout(maLogoutWarnTimer);
+  // Warnung nach 2,5 Minuten
+  maLogoutWarnTimer = setTimeout(()=>{
+    if(currentUser && currentUser !== 'admin'){
+      toast('⏱ Automatische Abmeldung in 30 Sekunden …','var(--orange)');
+    }
+  }, MA_WARN);
+  // Logout nach 3 Minuten
+  maLogoutTimer = setTimeout(()=>{
+    if(currentUser && currentUser !== 'admin'){
+      toast('🔒 Automatisch abgemeldet','var(--orange)');
+      setTimeout(doLogout, 1500);
+    }
+  }, MA_TIMEOUT);
+}
+
+function stopMaLogoutTimer(){
+  clearTimeout(maLogoutTimer);
+  clearTimeout(maLogoutWarnTimer);
+  maLogoutTimer = null;
+  maLogoutWarnTimer = null;
+}
+
 function loginAsAdmin(){
   currentUser='admin';
   sessionStorage.setItem('bm_session','admin');
@@ -4632,13 +4720,11 @@ function updatePinDots(){
 }
 
 function checkPin(){
-  // Prüfe ob eine der Mitarbeiter-PINs passt
   const ma=workers.find(w=>w.pin&&w.pin===pinBuffer);
   if(ma){
     loginAsMitarbeiter(ma);
     return;
   }
-  // Falsche PIN
   for(let i=0;i<4;i++) document.getElementById('dot-'+i).className='pin-dot error';
   document.getElementById('login-error').textContent='Falsche PIN – bitte erneut versuchen';
   setTimeout(()=>{
@@ -4648,18 +4734,31 @@ function checkPin(){
   },1200);
 }
 
-function loginAsMitarbeiter(ma){
+async function loginAsMitarbeiter(ma){
   currentUser={id:ma.id, name:ma.vorname+' '+ma.nachname};
   sessionStorage.setItem('bm_session', JSON.stringify(currentUser));
   document.getElementById('login-screen').style.display='none';
   document.getElementById('main-app').style.display='none';
-  // Bottom-Nav explizit verstecken
   const bnav = document.querySelector('.bnav');
   if(bnav) bnav.style.display='none';
   const maApp = document.getElementById('ma-app');
   maApp.style.display='block';
-  document.getElementById('ma-app-name').textContent='Hallo, '+ma.vorname+'!';
-  renderMaZeiterfassung(ma.id);
+  document.getElementById('ma-app-name').textContent='⏳ Lädt …';
+
+  // Frische Daten aus Supabase laden
+  try{
+    const cloudData = await sbLoadAll();
+    projects   = cloudData.projects   || projects;
+    workers    = cloudData.workers    || workers;
+    zeiten     = cloudData.zeiten     || zeiten;
+    rechnungen = cloudData.rechnungen || rechnungen;
+  }catch(e){ console.warn('Reload bei Login fehlgeschlagen',e); }
+
+  // Mitarbeiter nach Reload neu suchen (falls Daten aktualisiert)
+  const frischeMa = workers.find(w=>String(w.id)===String(ma.id)) || ma;
+  document.getElementById('ma-app-name').textContent='Hallo, '+frischeMa.vorname+'!';
+
+  renderMaZeiterfassung(frischeMa.id);
   requestAnimationFrame(()=>{
     const header = document.getElementById('ma-header');
     const content = document.getElementById('ma-zeit-content');
@@ -4668,15 +4767,30 @@ function loginAsMitarbeiter(ma){
       content.style.top = h+'px';
     }
   });
+
+  // Auto-Logout nach 3 Minuten Inaktivität starten
+  resetMaLogoutTimer();
+
+  // Bei jeder Interaktion Timer zurücksetzen
+  maApp.addEventListener('touchstart', resetMaLogoutTimer, {passive:true});
+  maApp.addEventListener('click', resetMaLogoutTimer);
+  maApp.addEventListener('input', resetMaLogoutTimer);
 }
 
 function doLogout(){
+  stopMaLogoutTimer();
   currentUser=null;
   sessionStorage.removeItem('bm_session');
   pinBuffer='';
-  // Bottom-Nav wieder einblenden
   const bnav = document.querySelector('.bnav');
   if(bnav) bnav.style.display='';
+  // Event Listener entfernen
+  const maApp = document.getElementById('ma-app');
+  if(maApp){
+    maApp.removeEventListener('touchstart', resetMaLogoutTimer);
+    maApp.removeEventListener('click', resetMaLogoutTimer);
+    maApp.removeEventListener('input', resetMaLogoutTimer);
+  }
   showLoginScreen();
 }
 
