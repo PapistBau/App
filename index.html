@@ -4932,7 +4932,6 @@ async function syncToCloud(){
     await sbDeleteMissing('zeiten',    zeiten.map(x=>x.id));
     await sbDeleteMissing('material',  material.map(x=>x.id));
     setSyncStatus('ok');
-    localStorage.setItem('bm_cloud_save', Date.now().toString());
   }catch(e){
     console.warn('Sync error:',e);
     setSyncStatus('offline');
@@ -4954,79 +4953,36 @@ async function sbLoadAll(){
 async function initFromCloud(){
   setSyncStatus('saving');
   try{
+    // Supabase ist IMMER die einzige Quelle der Wahrheit
     const cloudData = await sbLoadAll();
-    const hasCloudData = Object.values(cloudData).some(arr=>arr.length>0);
-    const hasLocalData = projects.length>0||rechnungen.length>0||workers.length>0;
-    const localLastSave = parseInt(localStorage.getItem('bm_last_save')||'0');
-    const cloudLastSave = parseInt(localStorage.getItem('bm_cloud_save')||'0');
-
-    if(hasCloudData && hasLocalData){
-      // Beide haben Daten → nimm jeweils den größeren Datensatz (mehr Einträge = aktueller)
-      // Außer wenn lokal nach dem letzten Cloud-Sync gespeichert wurde
-      const localNewerThanCloud = localLastSave > cloudLastSave + 5000; // 5s Puffer
-
-      if(localNewerThanCloud){
-        // Lokale Änderungen sind neuer → in Cloud hochladen
-        setSyncStatus('saving');
-        await syncToCloud();
-        localStorage.setItem('bm_cloud_save', Date.now().toString());
-      } else {
-        // Cloud gewinnt aber nur wenn mehr oder gleich viele Einträge
-        const merge = (local, cloud) => cloud.length >= local.length ? cloud : local;
-        projects   = merge(projects,   cloudData.projects);
-        workers    = merge(workers,    cloudData.workers);
-        zeiten     = merge(zeiten,     cloudData.zeiten);
-        rechnungen = merge(rechnungen, cloudData.rechnungen);
-        todos      = merge(todos,      cloudData.todos);
-        kategorien = merge(kategorien, cloudData.kategorien);
-        allgTodos  = merge(allgTodos,  cloudData.allgtodos);
-        if(cloudData.material&&cloudData.material.length) material = merge(material, cloudData.material);
-        if(cloudData.fotos.length) fotos = cloudData.fotos;
-        // Lokal speichern
-        localStorage.setItem('bm_proj',JSON.stringify(projects));
-        localStorage.setItem('bm_ma',JSON.stringify(workers));
-        localStorage.setItem('bm_zeit',JSON.stringify(zeiten));
-        localStorage.setItem('bm_rech',JSON.stringify(rechnungen));
-        localStorage.setItem('bm_todos',JSON.stringify(todos));
-        localStorage.setItem('bm_fotos',JSON.stringify(fotos));
-        localStorage.setItem('bm_kat',JSON.stringify(kategorien));
-        localStorage.setItem('bm_allgtodos',JSON.stringify(allgTodos));
-        localStorage.setItem('bm_cloud_save', Date.now().toString());
-      }
-      setSyncStatus('online');
-    } else if(hasCloudData && !hasLocalData){
-      // Nur Cloud hat Daten → übernehmen
-      projects    = cloudData.projects;
-      workers     = cloudData.workers;
-      zeiten      = cloudData.zeiten;
-      rechnungen  = cloudData.rechnungen;
-      todos       = cloudData.todos;
-      kategorien  = cloudData.kategorien;
-      allgTodos   = cloudData.allgtodos;
-      if(cloudData.fotos.length) fotos = cloudData.fotos;
-      localStorage.setItem('bm_proj',JSON.stringify(projects));
-      localStorage.setItem('bm_ma',JSON.stringify(workers));
-      localStorage.setItem('bm_zeit',JSON.stringify(zeiten));
-      localStorage.setItem('bm_rech',JSON.stringify(rechnungen));
-      localStorage.setItem('bm_todos',JSON.stringify(todos));
-      localStorage.setItem('bm_fotos',JSON.stringify(fotos));
-      localStorage.setItem('bm_kat',JSON.stringify(kategorien));
-      localStorage.setItem('bm_allgtodos',JSON.stringify(allgTodos));
-      setSyncStatus('online');
-    } else if(hasLocalData){
-      // Cloud leer → lokale Daten hochladen
-      await syncToCloud();
-      localStorage.setItem('bm_cloud_save', Date.now().toString());
-      setSyncStatus('online');
-    } else {
-      setSyncStatus('online');
-    }
+    projects    = cloudData.projects    || [];
+    workers     = cloudData.workers     || [];
+    zeiten      = cloudData.zeiten      || [];
+    rechnungen  = cloudData.rechnungen  || [];
+    todos       = cloudData.todos       || [];
+    kategorien  = cloudData.kategorien  || [];
+    allgTodos   = cloudData.allgtodos   || [];
+    material    = cloudData.material    || [];
+    if(cloudData.fotos && cloudData.fotos.length) fotos = cloudData.fotos;
+    // Lokal cachen
+    localStorage.setItem('bm_proj',      JSON.stringify(projects));
+    localStorage.setItem('bm_ma',        JSON.stringify(workers));
+    localStorage.setItem('bm_zeit',      JSON.stringify(zeiten));
+    localStorage.setItem('bm_rech',      JSON.stringify(rechnungen));
+    localStorage.setItem('bm_todos',     JSON.stringify(todos));
+    localStorage.setItem('bm_fotos',     JSON.stringify(fotos));
+    localStorage.setItem('bm_kat',       JSON.stringify(kategorien));
+    localStorage.setItem('bm_allgtodos', JSON.stringify(allgTodos));
+    localStorage.setItem('bm_material',  JSON.stringify(material));
+    setSyncStatus('online');
   }catch(e){
     console.warn('Cloud init error:',e);
     setSyncStatus('offline');
+    toast('⚠ Offline – lokale Daten werden verwendet','var(--orange)');
   }
   initAuth();
 }
+
 
 // ════════════════════════════════════
 // INIT
