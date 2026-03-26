@@ -1124,8 +1124,9 @@ header{background:var(--surface);border-bottom:1px solid var(--border);height:56
   <div class="fg"><label class="fl">Telefon</label><input class="fi" id="ma-tel" placeholder="+49 …"></div>
   <div class="fg">
     <label class="fl">PIN (4-stellig) <span style="color:var(--t2);font-weight:400">– für App-Zugang</span></label>
-    <input class="fi" id="ma-pin" placeholder="z.B. 1234" maxlength="4" pattern="[0-9]{4}" style="letter-spacing:8px;font-size:20px;font-weight:700">
-    <div style="font-size:11px;color:var(--t2);margin-top:4px">⚠ Nur Ziffern, genau 4-stellig. Leer lassen = kein App-Zugang.</div>
+    <input class="fi" id="ma-pin" placeholder="z.B. 1234" maxlength="4" pattern="[0-9]{4}" style="letter-spacing:8px;font-size:20px;font-weight:700" oninput="checkPinLive(this)">
+    <div id="ma-pin-live" style="font-size:12px;margin-top:4px;min-height:16px"></div>
+    <div style="font-size:11px;color:var(--t2);margin-top:2px">⚠ Nur Ziffern, genau 4-stellig. Leer lassen = kein App-Zugang.</div>
   </div>
   <div class="mfooter">
     <button class="btn btn-ghost" onclick="closeModal('modal-ma')">Abbrechen</button>
@@ -2918,6 +2919,9 @@ function openMAModal(){
   editMAId=null;
   document.getElementById('ma-mttl').textContent='Mitarbeiter anlegen';
   ['ma-vn','ma-nn','ma-rolle','ma-lohn','ma-tel','ma-pin'].forEach(id=>document.getElementById(id).value='');
+  const pinLive = document.getElementById('ma-pin-live');
+  if(pinLive) pinLive.textContent='';
+  document.getElementById('ma-pin').style.borderColor='';
   document.getElementById('modal-ma').style.display='flex';
 }
 
@@ -2934,11 +2938,62 @@ function editMA(id){
   document.getElementById('modal-ma').style.display='flex';
 }
 
+function checkPinLive(input){
+  const pin = input.value.trim();
+  const liveEl = document.getElementById('ma-pin-live');
+  if(!liveEl) return;
+  if(pin.length < 4){ liveEl.textContent=''; input.style.borderColor=''; return; }
+  const duplicate = workers.find(w => w.pin === pin && String(w.id) !== String(editMAId));
+  if(duplicate){
+    liveEl.style.color = 'var(--red)';
+    liveEl.textContent = `⚠ Bereits vergeben von ${duplicate.vorname} ${duplicate.nachname}`;
+    input.style.borderColor = 'var(--red)';
+  } else {
+    liveEl.style.color = 'var(--green)';
+    liveEl.textContent = '✅ PIN verfügbar';
+    input.style.borderColor = 'var(--green)';
+  }
+}
+
 function saveMA(){
   const vn=document.getElementById('ma-vn').value.trim();
   const nn=document.getElementById('ma-nn').value.trim();
   if(!vn||!nn){alert('Vor- und Nachname erforderlich.');return;}
   const pin=document.getElementById('ma-pin').value.trim();
+
+  // Doppelte PIN prüfen
+  if(pin && /^\d{4}$/.test(pin)){
+    const duplicate = workers.find(w => w.pin === pin && String(w.id) !== String(editMAId));
+    if(duplicate){
+      // PIN-Feld rot markieren
+      const pinField = document.getElementById('ma-pin');
+      pinField.style.borderColor = 'var(--red)';
+      pinField.style.boxShadow = '0 0 0 2px rgba(248,81,73,0.3)';
+      // Fehlermeldung anzeigen
+      let errEl = document.getElementById('ma-pin-error');
+      if(!errEl){
+        errEl = document.createElement('div');
+        errEl.id = 'ma-pin-error';
+        errEl.style.cssText = 'color:var(--red);font-size:12px;margin-top:4px;font-weight:600';
+        pinField.parentNode.appendChild(errEl);
+      }
+      errEl.textContent = `⚠ PIN bereits vergeben von ${duplicate.vorname} ${duplicate.nachname}`;
+      setTimeout(()=>{
+        pinField.style.borderColor='';
+        pinField.style.boxShadow='';
+        if(errEl) errEl.textContent='';
+      }, 4000);
+      return;
+    }
+  }
+
+  // PIN-Fehler zurücksetzen
+  const pinField = document.getElementById('ma-pin');
+  pinField.style.borderColor='';
+  pinField.style.boxShadow='';
+  const errEl = document.getElementById('ma-pin-error');
+  if(errEl) errEl.textContent='';
+
   const w={id:editMAId||Date.now(),vorname:vn,nachname:nn,rolle:document.getElementById('ma-rolle').value.trim(),lohn:parseFloat(document.getElementById('ma-lohn').value)||0,tel:document.getElementById('ma-tel').value.trim(),pin:pin&&/^\d{4}$/.test(pin)?pin:''};
   if(editMAId){const i=workers.findIndex(x=>String(x.id)===String(editMAId));if(i>-1)workers[i]=w;}
   else workers.push(w);
