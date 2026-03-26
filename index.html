@@ -1547,53 +1547,7 @@ const RS={
   mahnung:    {lbl:'🔴 Mahnung',     cls:'rs-mahnung',   ico:'!',ck:'mahnung'},
 };
 
-// ── SEED ──
-if(!projects.length){
-  projects=[
-    {id:1,typ:'laufend',name:'Neubau EFH Familie Weber',kunde:'Familie Weber',ort:'München',start:'2025-03-01',ende:'2025-09-30',wert:480000,prog:45,od:'',notes:'Keller fertig. Rohbau läuft.'},
-    {id:2,typ:'laufend',name:'Dachsanierung MFH Augsburg',kunde:'HV Bauer GmbH',ort:'Augsburg',start:'2025-04-15',ende:'2025-07-31',wert:95000,prog:20,od:'',notes:'Materialbestellung läuft.'},
-    {id:3,typ:'abgeschlossen',name:'Bad Renovierung Meier',kunde:'Herr Meier',ort:'Ingolstadt',start:'2024-10-01',ende:'2024-11-15',wert:18500,prog:100,od:'',notes:'Abgenommen 15.11.2024.'},
-    {id:4,typ:'angebot',name:'Terrassenüberdachung Schmidt',kunde:'Frau Schmidt',ort:'Landsberg',start:'',ende:'2025-06-01',wert:22000,prog:0,od:'',notes:'Angebot versendet 10.04.'},
-    {id:5,typ:'angebot-offen',name:'Innenausbau Büro TechCo',kunde:'TechCo GmbH',ort:'München',start:'',ende:'',wert:0,prog:0,od:'',notes:'Besichtigung 08.04. Angebot noch offen!'},
-    {id:6,typ:'anfrage',name:'Garage + Carport Huber',kunde:'Familie Huber',ort:'Dachau',start:'',ende:'',wert:0,prog:0,od:'',notes:'Anruf 09.04.'},
-  ];
-}
-if(!workers.length){
-  workers=[
-    {id:1,vorname:'Thomas',nachname:'Bauer',rolle:'Polier',lohn:28,tel:'+49 151 111'},
-    {id:2,vorname:'Stefan',nachname:'Koch',rolle:'Maurer',lohn:22,tel:'+49 152 222'},
-    {id:3,vorname:'Klaus',nachname:'Huber',rolle:'Helfer',lohn:17,tel:'+49 153 333'},
-  ];
-}
-if(!zeiten.length){
-  const d=n=>{const x=new Date();x.setDate(x.getDate()+n);return x.toISOString().split('T')[0];};
-  zeiten=[
-    {id:1,datum:d(0),maId:1,projId:1,std:8,zeit:'07:00–15:30',notiz:'Schalung aufgebaut'},
-    {id:2,datum:d(0),maId:2,projId:1,std:8,zeit:'07:00–15:30',notiz:''},
-    {id:3,datum:d(0),maId:3,projId:2,std:6,zeit:'08:00–14:00',notiz:'Dachziegel verlegen'},
-    {id:4,datum:d(-1),maId:1,projId:2,std:8,zeit:'07:00–15:30',notiz:''},
-    {id:5,datum:d(-1),maId:2,projId:3,std:4,zeit:'08:00–12:00',notiz:'Abnahme'},
-    {id:6,datum:d(-2),maId:1,projId:1,std:8,zeit:'07:00–15:30',notiz:'Beton gegossen'},
-  ];
-}
-if(!rechnungen.length){
-  rechnungen=[
-    {id:1,nr:'2025-001',datum:'2025-03-15',projId:1,betrag:120000,faellig:'2025-04-15',beschr:'Abschlag 1 – Fundament',status:'bezahlt',bezam:'2025-04-10',notiz:''},
-    {id:2,nr:'2025-002',datum:'2025-04-20',projId:1,betrag:95000,faellig:'2025-05-20',beschr:'Abschlag 2 – Rohbau EG',status:'offen',bezam:'',notiz:'Erinnerung versendet'},
-    {id:3,nr:'2025-003',datum:'2025-03-01',projId:2,betrag:30000,faellig:'2025-04-01',beschr:'Abschlag 1',status:'bezahlt',bezam:'2025-03-28',notiz:''},
-    {id:4,nr:'2025-004',datum:'2025-04-10',projId:2,betrag:40000,faellig:'2025-05-10',beschr:'Abschlag 2',status:'mahnung',bezam:'',notiz:'2. Mahnung versendet'},
-    {id:5,nr:'2024-031',datum:'2024-10-20',projId:3,betrag:9500,faellig:'2024-11-20',beschr:'Abschlag 1',status:'bezahlt',bezam:'2024-11-15',notiz:''},
-    {id:6,nr:'2024-038',datum:'2024-11-16',projId:3,betrag:9000,faellig:'2024-12-16',beschr:'Schlussrechnung',status:'bezahlt',bezam:'2024-12-10',notiz:''},
-  ];
-}
-if(!todos.length){
-  todos=[
-    {id:1,projId:1,text:'Betonlieferung koordinieren',prio:'hoch',due:'2025-05-20',done:false},
-    {id:2,projId:1,text:'Bauabnahme Rohbau vereinbaren',prio:'mittel',due:'2025-06-01',done:false},
-    {id:3,projId:2,text:'Dachziegel nachbestellen',prio:'hoch',due:'2025-05-10',done:true},
-  ];
-}
-saveAll();
+// Keine Demo-Daten mehr — Supabase ist die einzige Quelle
 
 // ════════════════════════════════════
 // NAVIGATION
@@ -4924,6 +4878,18 @@ function hashPin(pin){
 const ADMIN_HASH_DEFAULT = '1689278';
 // Alten gespeicherten Hash löschen damit immer das eingebaute PW gilt
 localStorage.removeItem('bm_admin_pw');
+// Demo-IDs aus deleted_ids entfernen falls noch vorhanden
+try{
+  const del = JSON.parse(localStorage.getItem('bm_deleted')||'{}');
+  const demoIds = ['1','2','3','4','5','6'];
+  let changed = false;
+  Object.keys(del).forEach(table=>{
+    const before = del[table].length;
+    del[table] = del[table].filter(id=>!demoIds.includes(String(id)));
+    if(del[table].length !== before) changed = true;
+  });
+  if(changed) localStorage.setItem('bm_deleted', JSON.stringify(del));
+}catch(e){}
 
 async function getAdminHash(){
   // Eingebautes Passwort hat immer Vorrang
