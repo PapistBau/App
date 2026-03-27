@@ -785,6 +785,39 @@ header{background:var(--surface);border-bottom:1px solid var(--border);height:56
       <button class="btn btn-primary" onclick="openRechModal()">＋ Manuell erfassen</button>
     </div>
   </div>
+
+  <!-- SAMMELRECHNUNG DRAG & DROP -->
+  <div id="sammel-zone" style="border:2px dashed var(--border);border-radius:var(--r);padding:20px;margin-bottom:16px;text-align:center;transition:all .2s;cursor:pointer;background:var(--card)"
+    ondragover="event.preventDefault();this.style.borderColor='var(--accent)';this.style.background='var(--card2)'"
+    ondragleave="this.style.borderColor='var(--border)';this.style.background='var(--card)'"
+    ondrop="handleSammelDrop(event)">
+    <div style="font-size:28px;margin-bottom:8px">📂</div>
+    <div style="font-weight:600;color:var(--text)">PDFs hier reinziehen für Sammelrechnung</div>
+    <div style="font-size:12px;color:var(--t2);margin-top:4px">Beträge werden automatisch erkannt und summiert</div>
+  </div>
+
+  <!-- SAMMELRECHNUNG ERGEBNIS -->
+  <div id="sammel-result" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin-bottom:16px;overflow:hidden">
+    <div style="padding:13px 16px;font-family:'Bebas Neue',sans-serif;font-size:18px;border-bottom:1px solid var(--border);color:var(--accent);display:flex;justify-content:space-between;align-items:center">
+      <span>📋 Sammelrechnung</span>
+      <button class="btn btn-ghost btn-sm" onclick="clearSammel()">✕ Leeren</button>
+    </div>
+    <div id="sammel-items" style="padding:0"></div>
+    <div style="padding:14px 16px;background:var(--card2);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:12px;color:var(--t2)">Gesamtsumme Netto</div>
+        <div id="sammel-total" style="font-family:'Bebas Neue',sans-serif;font-size:32px;color:var(--accent)">0,00 €</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <select class="fs" id="sammel-proj" style="min-width:200px">
+          <option value="">— Projekt wählen —</option>
+        </select>
+        <input class="fi" id="sammel-nr" placeholder="Rechnungs-Nr." style="width:140px">
+        <button class="btn btn-primary" onclick="createSammelRechnung()">✅ Als Rechnung speichern</button>
+      </div>
+    </div>
+  </div>
+
   <div id="pdf-upload-info" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:16px;font-size:13px;color:var(--t2)"></div>
   <div class="stats" id="rech-stats"></div>
   <div class="fbar">
@@ -3963,6 +3996,150 @@ function printMonat(){
   setTimeout(()=>window.print(),200);
 }
 
+// ════════════════════════════════════
+// SAMMELRECHNUNG DRAG & DROP
+// ════════════════════════════════════
+let sammelItems = []; // {name, netto}
+
+async function handleSammelDrop(event){
+  event.preventDefault();
+  const zone = document.getElementById('sammel-zone');
+  zone.style.borderColor='var(--border)';
+  zone.style.background='var(--card)';
+
+  const files = Array.from(event.dataTransfer.files).filter(f=>f.type==='application/pdf'||f.name.endsWith('.pdf'));
+  if(!files.length){ toast('⚠ Nur PDF-Dateien werden akzeptiert','var(--orange)'); return; }
+
+  zone.innerHTML='<div style="font-size:28px">⏳</div><div style="font-weight:600">Lese PDFs aus …</div>';
+
+  for(const file of files){
+    try{
+      const base64 = await fileToBase64(file);
+      let netto = 0;
+      let text = '';
+      // PDF.js versuchen
+      if(window.pdfjsLib){
+        try{
+          const pdf = await pdfjsLib.getDocument({data:atob(base64)}).promise;
+          for(let i=1;i<=Math.min(pdf.numPages,3);i++){
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            text += content.items.map(s=>s.str).join(' ') + ' ';
+          }
+        }catch(e){}
+      }
+      // Fallback
+      if(!text) text = await extractPdfTextFallback(base64);
+      netto = extractNettoFromText(text);
+      sammelItems.push({name: file.name.replace('.pdf',''), netto, raw: text});
+    }catch(e){
+      sammelItems.push({name: file.name.replace('.pdf',''), netto: 0, raw:''});
+    }
+  }
+
+  renderSammelResult();
+  // Zone zurücksetzen
+  zone.innerHTML='<div style="font-size:28px;margin-bottom:8px">📂</div><div style="font-weight:600;color:var(--text)">PDFs hier reinziehen für Sammelrechnung</div><div style="font-size:12px;color:var(--t2);margin-top:4px">Beträge werden automatisch erkannt und summiert</div>';
+}
+
+function extractNettoFromText(text){
+  // Normalisieren
+  text = text.replace(/\s+/g,' ');
+  // Typische Netto-Muster suchen
+  const patterns = [
+    /nettobetrag[:\s]*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?)/i,
+    /netto[:\s]*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?)\s*€/i,
+    /betrag\s+netto[:\s]*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?)/i,
+    /gesamtbetrag\s+netto[:\s]*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?)/i,
+    /summe\s+netto[:\s]*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?)/i,
+    /zwischensumme[:\s]*([0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?)/i,
+  ];
+  for(const pat of patterns){
+    const m = text.match(pat);
+    if(m){
+      const val = m[1].replace(/\./g,'').replace(',','.');
+      const n = parseFloat(val);
+      if(n > 0 && n < 9999999) return Math.round(n*100)/100;
+    }
+  }
+  // Fallback: größte Zahl die wie ein Betrag aussieht
+  const allNums = [...text.matchAll(/([0-9]{1,3}(?:\.[0-9]{3})*,[0-9]{2})/g)]
+    .map(m=>parseFloat(m[1].replace(/\./g,'').replace(',','.')))
+    .filter(n=>n>10 && n<999999)
+    .sort((a,b)=>b-a);
+  return allNums[1] || allNums[0] || 0; // zweithöchste = oft Netto
+}
+
+function fileToBase64(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>res(r.result.split(',')[1]);
+    r.onerror=rej;
+    r.readAsDataURL(file);
+  });
+}
+
+function renderSammelResult(){
+  const result = document.getElementById('sammel-result');
+  const items = document.getElementById('sammel-items');
+  const total = document.getElementById('sammel-total');
+  const projSel = document.getElementById('sammel-proj');
+
+  if(!sammelItems.length){ result.style.display='none'; return; }
+  result.style.display='block';
+
+  // Projekt-Dropdown füllen
+  projSel.innerHTML='<option value="">— Projekt wählen —</option>'+
+    projects.filter(p=>!p.archiviert).map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+
+  // Zeilen
+  items.innerHTML = sammelItems.map((it,i)=>`
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid rgba(48,54,61,.3)">
+      <div style="flex:1;font-size:13px;color:var(--t2)">${it.name}</div>
+      <input type="number" value="${it.netto}" step="0.01" min="0"
+        style="width:120px;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text);font-size:14px;font-weight:700;text-align:right"
+        onchange="sammelItems[${i}].netto=parseFloat(this.value)||0;updateSammelTotal()">
+      <span style="color:var(--t2);font-size:13px">€ Netto</span>
+      <button class="del-btn" onclick="sammelItems.splice(${i},1);renderSammelResult()">✕</button>
+    </div>
+  `).join('');
+
+  updateSammelTotal();
+}
+
+function updateSammelTotal(){
+  const sum = sammelItems.reduce((a,it)=>a+it.netto,0);
+  const el = document.getElementById('sammel-total');
+  if(el) el.textContent = num(sum)+' €';
+}
+
+function clearSammel(){
+  sammelItems=[];
+  document.getElementById('sammel-result').style.display='none';
+}
+
+function createSammelRechnung(){
+  const projId = parseInt(document.getElementById('sammel-proj').value);
+  const nr = document.getElementById('sammel-nr').value.trim();
+  if(!projId){ toast('⚠ Bitte ein Projekt wählen','var(--orange)'); return; }
+  const netto = Math.round(sammelItems.reduce((a,it)=>a+it.netto,0)*100)/100;
+  if(netto<=0){ toast('⚠ Gesamtsumme ist 0','var(--orange)'); return; }
+  const mwst = 19;
+  const brutto = Math.round(netto*1.19*100)/100;
+  const beschr = sammelItems.length===1 ? sammelItems[0].name : `Sammelrechnung (${sammelItems.length} Positionen)`;
+  const r={
+    id:Date.now(), projId, nr, beschr,
+    netto, betrag:brutto, mwst,
+    datum:today(), status:'offen',
+    _syncSession:SYNC_SESSION
+  };
+  rechnungen.unshift(r);
+  saveAll();
+  clearSammel();
+  renderRechnungen();
+  toast(`✅ Rechnung über ${num(netto)} € Netto gespeichert`);
+}
+
 // ── CSV EXPORT ──
 function exportCSV(type){
   let rows=[],filename='';
@@ -4772,6 +4949,50 @@ function saveMaterial(){
   toast('💾 Material gespeichert');
 }
 
+function createSammelrechnung(projId){
+  const p = projects.find(x=>String(x.id)===String(projId));
+  if(!p) return;
+
+  const matItems = material.filter(m=>String(m.projId)===String(projId));
+  if(!matItems.length){ toast('Keine Materialkosten für dieses Projekt','var(--orange)'); return; }
+
+  const totalNetto  = Math.round(matItems.reduce((a,m)=>a+m.netto,0)*100)/100;
+  const totalBrutto = Math.round(matItems.reduce((a,m)=>a+m.brutto,0)*100)/100;
+  const vonDatum    = matItems.map(m=>m.datum).sort()[0];
+  const bisDatum    = matItems.map(m=>m.datum).sort().pop();
+  const lieferanten = [...new Set(matItems.map(m=>m.lieferant).filter(Boolean))].join(', ');
+  const anzahl      = matItems.length;
+
+  // Rechnung direkt anlegen
+  const r = {
+    id: Date.now(),
+    projId: parseInt(projId)||projId,
+    nr: `MAT-${today().replace(/-/g,'')}`,
+    beschr: `Materialkosten (${anzahl} Rechnungen: ${lieferanten||'diverse Lieferanten'})`,
+    datum: today(),
+    faellig: '',
+    betrag: totalBrutto,
+    netto: totalNetto,
+    wertMwst: '19%',
+    status: 'offen',
+    notiz: `Sammelrechnung Material ${fmt(vonDatum)} – ${fmt(bisDatum)}`,
+    typ: 'material-sammel',
+    _syncSession: SYNC_SESSION
+  };
+
+  // Bestätigung zeigen
+  confirmDelete(
+    '📄 Sammelrechnung erstellen?',
+    `Projekt: ${p.name}\n${anzahl} Materialrechnungen\nNetto: ${num(totalNetto)} €\nBrutto: ${num(totalBrutto)} €\n\nDie Rechnung wird unter "Rechnungen" gespeichert.`,
+    ()=>{
+      rechnungen.unshift(r);
+      saveAll();
+      toast(`✅ Sammelrechnung ${r.nr} erstellt`);
+      goPage('rechnungen', null);
+    }
+  );
+}
+
 function delMaterial(id){
   const m=material.find(x=>String(x.id)===String(id));
   confirmDelete('Material löschen?',
@@ -4921,9 +5142,14 @@ function renderMaterial(){
       <div class="ctrl-proj-header">
         <div class="pcard-bar" style="width:5px;height:40px;border-radius:3px;background:${sc.col};flex-shrink:0"></div>
         <div style="flex:1"><div style="font-weight:700">${sc.ico} ${p?p.name:'Kein Projekt'}</div></div>
-        <div style="text-align:right">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--red)">${num(groupNetto)} €</div>
-          <div style="font-size:11px;color:var(--t2)">Netto gesamt</div>
+        <div style="text-align:right;display:flex;align-items:center;gap:10px">
+          <div>
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--red)">${num(groupNetto)} €</div>
+            <div style="font-size:11px;color:var(--t2)">Netto gesamt</div>
+          </div>
+          ${p?`<button class="btn btn-primary btn-sm" onclick="createSammelrechnung('${pid}')" title="Alle Materialkosten als eine Rechnung erfassen">
+            📄 Sammelrechnung
+          </button>`:''}
         </div>
       </div>
       <div style="padding:0 16px">${rows}</div>
