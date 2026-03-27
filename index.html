@@ -786,38 +786,6 @@ header{background:var(--surface);border-bottom:1px solid var(--border);height:56
     </div>
   </div>
 
-  <!-- SAMMELRECHNUNG DRAG & DROP -->
-  <div id="sammel-zone" style="border:2px dashed var(--border);border-radius:var(--r);padding:20px;margin-bottom:16px;text-align:center;transition:all .2s;cursor:pointer;background:var(--card)"
-    ondragover="event.preventDefault();this.style.borderColor='var(--accent)';this.style.background='var(--card2)'"
-    ondragleave="this.style.borderColor='var(--border)';this.style.background='var(--card)'"
-    ondrop="handleSammelDrop(event)">
-    <div style="font-size:28px;margin-bottom:8px">📂</div>
-    <div style="font-weight:600;color:var(--text)">PDFs hier reinziehen für Sammelrechnung</div>
-    <div style="font-size:12px;color:var(--t2);margin-top:4px">Beträge werden automatisch erkannt und summiert</div>
-  </div>
-
-  <!-- SAMMELRECHNUNG ERGEBNIS -->
-  <div id="sammel-result" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin-bottom:16px;overflow:hidden">
-    <div style="padding:13px 16px;font-family:'Bebas Neue',sans-serif;font-size:18px;border-bottom:1px solid var(--border);color:var(--accent);display:flex;justify-content:space-between;align-items:center">
-      <span>📋 Sammelrechnung</span>
-      <button class="btn btn-ghost btn-sm" onclick="clearSammel()">✕ Leeren</button>
-    </div>
-    <div id="sammel-items" style="padding:0"></div>
-    <div style="padding:14px 16px;background:var(--card2);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-      <div>
-        <div style="font-size:12px;color:var(--t2)">Gesamtsumme Netto</div>
-        <div id="sammel-total" style="font-family:'Bebas Neue',sans-serif;font-size:32px;color:var(--accent)">0,00 €</div>
-      </div>
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <select class="fs" id="sammel-proj" style="min-width:200px">
-          <option value="">— Projekt wählen —</option>
-        </select>
-        <input class="fi" id="sammel-nr" placeholder="Rechnungs-Nr." style="width:140px">
-        <button class="btn btn-primary" onclick="createSammelRechnung()">✅ Als Rechnung speichern</button>
-      </div>
-    </div>
-  </div>
-
   <div id="pdf-upload-info" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:14px;margin-bottom:16px;font-size:13px;color:var(--t2)"></div>
   <div class="stats" id="rech-stats"></div>
   <div class="fbar">
@@ -950,6 +918,39 @@ header{background:var(--surface);border-bottom:1px solid var(--border);height:56
       <button class="btn btn-primary" onclick="openMaterialModal()">＋ Manuell erfassen</button>
     </div>
   </div>
+
+  <!-- SAMMELRECHNUNG DRAG & DROP -->
+  <div id="sammel-zone" style="border:2px dashed var(--border);border-radius:var(--r);padding:20px;margin-bottom:16px;text-align:center;transition:all .2s;cursor:pointer;background:var(--card)"
+    ondragover="event.preventDefault();this.style.borderColor='var(--accent)';this.style.background='var(--card2)'"
+    ondragleave="this.style.borderColor='var(--border)';this.style.background='var(--card)'"
+    ondrop="handleSammelDrop(event)">
+    <div style="font-size:28px;margin-bottom:8px">📂</div>
+    <div style="font-weight:600;color:var(--text)">Lieferantenrechnungen hier reinziehen</div>
+    <div style="font-size:12px;color:var(--t2);margin-top:4px">PDFs aus Outlook ziehen → Beträge werden erkannt → als Materialkosten speichern</div>
+  </div>
+
+  <!-- SAMMELRECHNUNG ERGEBNIS -->
+  <div id="sammel-result" style="display:none;background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin-bottom:16px;overflow:hidden">
+    <div style="padding:13px 16px;font-family:'Bebas Neue',sans-serif;font-size:18px;border-bottom:1px solid var(--border);color:var(--accent);display:flex;justify-content:space-between;align-items:center">
+      <span>🧱 Materialkosten erfassen</span>
+      <button class="btn btn-ghost btn-sm" onclick="clearSammel()">✕ Leeren</button>
+    </div>
+    <div id="sammel-items" style="padding:0"></div>
+    <div style="padding:14px 16px;background:var(--card2);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:12px;color:var(--t2)">Gesamtsumme Netto</div>
+        <div id="sammel-total" style="font-family:'Bebas Neue',sans-serif;font-size:32px;color:var(--accent)">0,00 €</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <select class="fs" id="sammel-proj" style="min-width:200px">
+          <option value="">— Projekt wählen —</option>
+        </select>
+        <input class="fi" id="sammel-lieferant" placeholder="Lieferant (optional)" style="width:160px">
+        <button class="btn btn-primary" onclick="createSammelMaterial()">✅ Als Materialkosten speichern</button>
+      </div>
+    </div>
+  </div>
+
   <div class="stats" id="mat-stats"></div>
   <div class="fbar">
     <input class="finput" placeholder="🔍 Lieferant, Projekt …" oninput="renderMaterial()" id="mat-search">
@@ -4082,24 +4083,21 @@ function fileToBase64(file){
 function renderSammelResult(){
   const result = document.getElementById('sammel-result');
   const items = document.getElementById('sammel-items');
-  const total = document.getElementById('sammel-total');
   const projSel = document.getElementById('sammel-proj');
 
   if(!sammelItems.length){ result.style.display='none'; return; }
   result.style.display='block';
 
-  // Projekt-Dropdown füllen
   projSel.innerHTML='<option value="">— Projekt wählen —</option>'+
     projects.filter(p=>!p.archiviert).map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
 
-  // Zeilen
   items.innerHTML = sammelItems.map((it,i)=>`
     <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid rgba(48,54,61,.3)">
-      <div style="flex:1;font-size:13px;color:var(--t2)">${it.name}</div>
+      <div style="flex:1;font-size:13px;color:var(--t2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${it.name}</div>
       <input type="number" value="${it.netto}" step="0.01" min="0"
         style="width:120px;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text);font-size:14px;font-weight:700;text-align:right"
         onchange="sammelItems[${i}].netto=parseFloat(this.value)||0;updateSammelTotal()">
-      <span style="color:var(--t2);font-size:13px">€ Netto</span>
+      <span style="color:var(--t2);font-size:13px;flex-shrink:0">€ Netto</span>
       <button class="del-btn" onclick="sammelItems.splice(${i},1);renderSammelResult()">✕</button>
     </div>
   `).join('');
@@ -4107,37 +4105,26 @@ function renderSammelResult(){
   updateSammelTotal();
 }
 
-function updateSammelTotal(){
-  const sum = sammelItems.reduce((a,it)=>a+it.netto,0);
-  const el = document.getElementById('sammel-total');
-  if(el) el.textContent = num(sum)+' €';
-}
-
-function clearSammel(){
-  sammelItems=[];
-  document.getElementById('sammel-result').style.display='none';
-}
-
-function createSammelRechnung(){
+function createSammelMaterial(){
   const projId = parseInt(document.getElementById('sammel-proj').value);
-  const nr = document.getElementById('sammel-nr').value.trim();
+  const lieferant = document.getElementById('sammel-lieferant').value.trim() || 'Sammellieferant';
   if(!projId){ toast('⚠ Bitte ein Projekt wählen','var(--orange)'); return; }
   const netto = Math.round(sammelItems.reduce((a,it)=>a+it.netto,0)*100)/100;
   if(netto<=0){ toast('⚠ Gesamtsumme ist 0','var(--orange)'); return; }
-  const mwst = 19;
   const brutto = Math.round(netto*1.19*100)/100;
   const beschr = sammelItems.length===1 ? sammelItems[0].name : `Sammelrechnung (${sammelItems.length} Positionen)`;
-  const r={
-    id:Date.now(), projId, nr, beschr,
-    netto, betrag:brutto, mwst,
-    datum:today(), status:'offen',
+  const mat={
+    id:Date.now(), projId, lieferant, beschr,
+    netto, brutto, mwstSatz:'19%',
+    datum:today(),
     _syncSession:SYNC_SESSION
   };
-  rechnungen.unshift(r);
+  mat._syncSession=SYNC_SESSION;
+  material.unshift(mat);
   saveAll();
   clearSammel();
-  renderRechnungen();
-  toast(`✅ Rechnung über ${num(netto)} € Netto gespeichert`);
+  renderMaterial();
+  toast(`✅ Materialkosten ${num(netto)} € Netto gespeichert`);
 }
 
 // ── CSV EXPORT ──
