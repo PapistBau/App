@@ -4008,39 +4008,18 @@ async function handleSammelDrop(event){
   zone.style.borderColor='var(--border)';
   zone.style.background='var(--card)';
 
-  const files = Array.from(event.dataTransfer.files).filter(f=>f.type==='application/pdf'||f.name.endsWith('.pdf'));
+  const files = Array.from(event.dataTransfer.files)
+    .filter(f=>f.type==='application/pdf'||f.name.toLowerCase().endsWith('.pdf'));
   if(!files.length){ toast('⚠ Nur PDF-Dateien werden akzeptiert','var(--orange)'); return; }
 
-  zone.innerHTML='<div style="font-size:28px">⏳</div><div style="font-weight:600">Lese PDFs aus …</div>';
-
-  for(const file of files){
-    try{
-      const base64 = await fileToBase64(file);
-      let netto = 0;
-      let text = '';
-      // PDF.js versuchen
-      if(window.pdfjsLib){
-        try{
-          const pdf = await pdfjsLib.getDocument({data:atob(base64)}).promise;
-          for(let i=1;i<=Math.min(pdf.numPages,3);i++){
-            const page = await pdf.getPage(i);
-            const content = await page.getTextContent();
-            text += content.items.map(s=>s.str).join(' ') + ' ';
-          }
-        }catch(e){}
-      }
-      // Fallback
-      if(!text) text = await extractPdfTextFallback(base64);
-      netto = extractNettoFromText(text);
-      sammelItems.push({name: file.name.replace('.pdf',''), netto, raw: text});
-    }catch(e){
-      sammelItems.push({name: file.name.replace('.pdf',''), netto: 0, raw:''});
-    }
-  }
+  // Sofort anzeigen — kein PDF-Lesen, Beträge manuell eingeben
+  files.forEach(file=>{
+    const name = file.name.replace(/\.pdf$/i,'');
+    sammelItems.push({name, netto: 0});
+  });
 
   renderSammelResult();
-  // Zone zurücksetzen
-  zone.innerHTML='<div style="font-size:28px;margin-bottom:8px">📂</div><div style="font-weight:600;color:var(--text)">PDFs hier reinziehen für Sammelrechnung</div><div style="font-size:12px;color:var(--t2);margin-top:4px">Beträge werden automatisch erkannt und summiert</div>';
+  toast(`📂 ${files.length} Datei${files.length>1?'en':''} hinzugefügt — bitte Beträge eintragen`);
 }
 
 function extractNettoFromText(text){
@@ -5378,16 +5357,26 @@ async function loginAsMitarbeiter(ma){
   maApp.style.display='block';
   document.getElementById('ma-app-name').textContent='⏳ Lädt …';
 
-  // Frische Daten aus Supabase laden
+  // Frische Daten aus Supabase laden — mit deleted_ids Filter
   try{
+    const deletedIds = new Set();
+    try{
+      const delRes = await fetch(`${SB_URL}/rest/v1/deleted_ids?select=id`,{headers:sbHeaders});
+      if(delRes.ok){ const rows = await delRes.json(); rows.forEach(r=>deletedIds.add(r.id)); }
+    }catch(e){}
+    // Demo-IDs immer blocken
+    ['1','2','3','4','5','6','7'].forEach(id=>{
+      ['projects','rechnungen','todos','allgtodos','kategorien'].forEach(t=>deletedIds.add(`${t}:${id}`));
+    });
+
+    const notDel = (table, items) => (items||[]).filter(x=>!deletedIds.has(`${table}:${String(x.id)}`));
     const cloudData = await sbLoadAll();
-    projects   = cloudData.projects   || projects;
+    projects   = notDel('projects',   cloudData.projects);
     workers    = cloudData.workers    || workers;
     zeiten     = cloudData.zeiten     || zeiten;
-    rechnungen = cloudData.rechnungen || rechnungen;
+    rechnungen = notDel('rechnungen', cloudData.rechnungen);
   }catch(e){ console.warn('Reload bei Login fehlgeschlagen',e); }
 
-  // Mitarbeiter nach Reload neu suchen (falls Daten aktualisiert)
   const frischeMa = workers.find(w=>String(w.id)===String(ma.id)) || ma;
   document.getElementById('ma-app-name').textContent='Hallo, '+frischeMa.vorname+'!';
 
@@ -5401,10 +5390,7 @@ async function loginAsMitarbeiter(ma){
     }
   });
 
-  // Auto-Logout nach 3 Minuten Inaktivität starten
   resetMaLogoutTimer();
-
-  // Bei jeder Interaktion Timer zurücksetzen
   maApp.addEventListener('touchstart', resetMaLogoutTimer, {passive:true});
   maApp.addEventListener('click', resetMaLogoutTimer);
   maApp.addEventListener('input', resetMaLogoutTimer);
@@ -5828,6 +5814,10 @@ async function initFromCloud(){
       const delRes = await fetch(`${SB_URL}/rest/v1/deleted_ids?select=id`,{headers:sbHeaders});
       if(delRes.ok){ const rows = await delRes.json(); rows.forEach(r=>deletedIds.add(r.id)); }
     }catch(e){}
+    // Demo-IDs 1-7 immer blocken
+    ['1','2','3','4','5','6','7'].forEach(id=>{
+      ['projects','rechnungen','todos','allgtodos','kategorien','workers','zeiten'].forEach(t=>deletedIds.add(`${t}:${id}`));
+    });
 
     const notDel = (table, items) => (items||[]).filter(x=>!deletedIds.has(`${table}:${String(x.id)}`));
 
