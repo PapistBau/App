@@ -3537,14 +3537,18 @@ function renderZeitList(){
     const p=projects.find(x=>String(x.id)===String(z.projId));
     const ini=w?(w.vorname[0]+w.nachname[0]).toUpperCase():'?';
     const ci='av-'+(workers.indexOf(w)%6||0);
+    const artLabel = {urlaub:'🏖 Urlaub',feiertag:'🎉 Feiertag',krank:'🤒 Krank','urlaub-unbezahlt':'📋 Unbez. Urlaub'};
+    const baustelle = z.art && z.art!=='arbeit'
+      ? `<div style="font-size:12px;color:var(--blue);font-weight:600">${artLabel[z.art]||z.art}</div>`
+      : `<div style="font-size:12px;color:var(--t2)">${p?p.name:'–'}</div>${z.zeit?`<div style="font-size:11px;color:var(--t3)">${z.zeit}</div>`:''}`;
     return`<div class="zt-row">
       <div style="font-weight:600">${fmt(z.datum)}</div>
       <div style="display:flex;align-items:center;gap:8px">
         <div class="ma-av ${ci}" style="width:28px;height:28px;font-size:11px">${ini}</div>
-        <div><div style="font-weight:600;font-size:13px">${w?w.vorname+' '+w.nachname:'Unbekannt'}</div>${z.notiz?`<div style="font-size:11px;color:var(--t2)">${z.notiz}</div>`:''}</div>
+        <div><div style="font-weight:600;font-size:13px">${w?w.vorname+' '+w.nachname:'Unbekannt'}</div>${z.notiz&&z.art!=='arbeit'?`<div style="font-size:11px;color:var(--t2)">${z.notiz}</div>`:z.notiz?`<div style="font-size:11px;color:var(--t2)">${z.notiz}</div>`:''}</div>
       </div>
       <div class="zt-h">${z.std}<span style="font-family:'DM Sans';font-size:11px;color:var(--t2)"> h</span></div>
-      <div><div style="font-size:12px;color:var(--t2)">${p?p.name:'Unbekannt'}</div>${z.zeit?`<div style="font-size:11px;color:var(--t3)">${z.zeit}</div>`:''}</div>
+      <div>${baustelle}</div>
       <div class="zt-acts">
         <button class="edit-btn" onclick="openZeitModal(${z.id})">✏</button>
         <button class="del-btn" onclick="delZeit(${z.id})">🗑</button>
@@ -3582,7 +3586,8 @@ function renderWeek(){
       const entries=zeiten.filter(z=>z.datum===d&&z.maId===w.id);
       const h=entries.reduce((a,z)=>a+z.std,0);total+=h;
       if(!entries.length)return'<td style="color:var(--t3)">–</td>';
-      return`<td>${entries.map(z=>{const p=projects.find(x=>String(x.id)===String(z.projId));return`<div class="we"><span class="we-h">${z.std}</span><span style="color:var(--t2);font-size:11px">${p?p.name.slice(0,12)+'…':''}</span></div>`;}).join('')}</td>`;
+      const artLbl={urlaub:'🏖 Urlaub',feiertag:'🎉 Feiertag',krank:'🤒 Krank','urlaub-unbezahlt':'📋 Unbez.'};
+      return`<td>${entries.map(z=>{const p=projects.find(x=>String(x.id)===String(z.projId));const lbl=z.art&&z.art!=='arbeit'?artLbl[z.art]||z.art:(p?p.name.slice(0,12)+(p.name.length>12?'…':''):'');return`<div class="we"><span class="we-h">${z.std}</span><span style="color:var(--t2);font-size:11px"> ${lbl}</span></div>`;}).join('')}</td>`;
     }).join('');
     return`<tr><td style="white-space:nowrap"><div style="display:flex;align-items:center;gap:8px"><div class="ma-av ${cls}" style="width:30px;height:30px;font-size:12px">${ini}</div><div><div style="font-weight:600;font-size:13px">${w.vorname} ${w.nachname}</div><div style="font-size:11px;color:var(--t2)">${w.rolle||''}</div></div></div></td>${cells}<td><span style="font-family:'Bebas Neue';font-size:22px;color:var(--accent)">${total}</span><span style="font-size:11px;color:var(--t2)"> h</span></td></tr>`;
   }).join('');
@@ -3668,7 +3673,7 @@ function renderReport(){
 
   // ── TAB 2: NACH PROJEKT ──
   const byProj={};
-  mZ.forEach(z=>{
+  arbeitsZ.forEach(z=>{
     if(!byProj[z.projId]) byProj[z.projId]={total:0,workers:{}};
     byProj[z.projId].total+=z.std;
     byProj[z.projId].workers[z.maId]=(byProj[z.projId].workers[z.maId]||0)+z.std;
