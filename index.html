@@ -653,7 +653,10 @@ header{background:var(--surface);border-bottom:1px solid var(--border);height:56
       <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--accent);line-height:1" id="ma-app-name">Hallo!</div>
       <div style="font-size:11px;color:var(--t2)">Stunden erfassen</div>
     </div>
-    <button class="btn btn-ghost btn-sm" onclick="doLogout()">🚪 Abmelden</button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="ma-lang-btn" onclick="toggleMaLang()" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text);font-size:13px;cursor:pointer">🇸🇰 SK</button>
+      <button id="ma-logout-btn" class="btn btn-ghost btn-sm" onclick="doLogout()">🚪 Abmelden</button>
+    </div>
   </div>
   <!-- Scrollbarer Content — fixer Bereich zwischen Header und unten -->
   <div id="ma-zeit-content" style="position:fixed;top:56px;left:0;right:0;bottom:0;overflow-y:scroll;-webkit-overflow-scrolling:touch;padding:16px 16px 120px 16px;box-sizing:border-box;"></div>
@@ -5514,6 +5517,57 @@ function doLogout(){
   showLoginScreen();
 }
 
+let maLang = 'de'; // 'de' oder 'sk'
+
+const maT = {
+  de: {
+    stundenBuchen: '⏱ Stunden buchen',
+    art: 'Art *', datum: 'Datum *', baustelle: 'Baustelle / Projekt *',
+    von: 'Von *', bis: 'Bis *', pause: 'Pause (Minuten)',
+    arbeitZeit: 'Arbeitszeit (abzüglich Pause)',
+    notiz: 'Notiz', notizPlaceholder: 'z.B. Fliesenlegen Bad OG',
+    abwNotiz: 'Notiz (optional)', abwNotizPlaceholder: 'z.B. AU-Schein liegt vor',
+    speichern: '💾 Speichern',
+    monatStunden: 'Stunden diesen Monat', stundenErfasst: 'Stunden erfasst',
+    meineBuchungen: '📋 Meine Buchungen',
+    eintraege: 'Einträge', gesamt: 'gesamt',
+    keineBuchungen: 'Keine Buchungen in diesem Monat',
+    abmelden: '🚪 Abmelden',
+    arbeit: '⚒ Arbeit', urlaub: '🏖 Urlaub', feiertag: '🎉 Feiertag',
+    krank: '🤒 Krank', unbezUrlaub: '📋 Unbez. Urlaub',
+    sprache: '🇸🇰 SK',
+  },
+  sk: {
+    stundenBuchen: '⏱ Zadať hodiny',
+    art: 'Typ *', datum: 'Dátum *', baustelle: 'Stavba / Projekt *',
+    von: 'Od *', bis: 'Do *', pause: 'Prestávka (minúty)',
+    arbeitZeit: 'Pracovný čas (po odpočítaní prestávky)',
+    notiz: 'Poznámka', notizPlaceholder: 'napr. Kladenie dlaždíc kúpeľňa',
+    abwNotiz: 'Poznámka (nepovinné)', abwNotizPlaceholder: 'napr. PN lístok priložený',
+    speichern: '💾 Uložiť',
+    monatStunden: 'Hodiny tento mesiac', stundenErfasst: 'hodín zaznamenaných',
+    meineBuchungen: '📋 Moje záznamy',
+    eintraege: 'záznamy', gesamt: 'spolu',
+    keineBuchungen: 'Žiadne záznamy v tomto mesiaci',
+    abmelden: '🚪 Odhlásiť',
+    arbeit: '⚒ Práca', urlaub: '🏖 Dovolenka', feiertag: '🎉 Sviatok',
+    krank: '🤒 PN', unbezUrlaub: '📋 Neplatená dovolenka',
+    sprache: '🇩🇪 DE',
+  }
+};
+
+function toggleMaLang(){
+  maLang = maLang==='de' ? 'sk' : 'de';
+  // Header-Button aktualisieren
+  const btn = document.getElementById('ma-lang-btn');
+  if(btn) btn.textContent = maT[maLang].sprache;
+  // Abmelden-Button
+  const logout = document.getElementById('ma-logout-btn');
+  if(logout) logout.textContent = maT[maLang].abmelden;
+  // Inhalt neu rendern
+  if(window._maCurrentId) renderMaZeiterfassung(window._maCurrentId, window._maCurrentMonth);
+}
+
 function renderMaZeiterfassung(maId, filterMonth){
   const ma=workers.find(w=>w.id===maId||String(w.id)===String(maId));
   if(!ma) return;
@@ -5533,33 +5587,38 @@ function renderMaZeiterfassung(maId, filterMonth){
   const monate=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
   const monthLabel=(m)=>{ const [y,mo]=m.split('-'); return monate[parseInt(mo)-1]+' '+y; };
 
+  // Sprache
+  window._maCurrentId = maId;
+  window._maCurrentMonth = filterMonth;
+  const t = maT[maLang] || maT.de;
+
   c.innerHTML=`
     <!-- Stunden buchen -->
     <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);margin-bottom:16px;overflow:hidden">
-      <div style="padding:13px 16px;font-family:'Bebas Neue',sans-serif;font-size:18px;border-bottom:1px solid var(--border);color:var(--accent)">⏱ Stunden buchen</div>
+      <div style="padding:13px 16px;font-family:'Bebas Neue',sans-serif;font-size:18px;border-bottom:1px solid var(--border);color:var(--accent)">${t.stundenBuchen}</div>
       <div style="padding:16px;display:flex;flex-direction:column;gap:14px">
 
         <div>
-          <label class="fl">Datum *</label>
+          <label class="fl">${t.datum}</label>
           <input type="date" class="fi" id="ma-z-datum" value="${today()}" style="font-size:16px">
         </div>
 
         <!-- Art der Buchung -->
         <div>
-          <label class="fl">Art *</label>
+          <label class="fl">${t.art}</label>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px" id="ma-z-art-buttons">
-            <button type="button" class="ma-art-btn active" data-art="arbeit" onclick="setMaArt('arbeit',this)" style="padding:12px;border:2px solid var(--accent);border-radius:10px;background:var(--accent);color:#000;font-weight:700;font-size:14px;cursor:pointer">⚒ Arbeit</button>
-            <button type="button" class="ma-art-btn" data-art="urlaub" onclick="setMaArt('urlaub',this)" style="padding:12px;border:2px solid var(--border);border-radius:10px;background:var(--card2);color:var(--t2);font-weight:600;font-size:14px;cursor:pointer">🏖 Urlaub</button>
-            <button type="button" class="ma-art-btn" data-art="feiertag" onclick="setMaArt('feiertag',this)" style="padding:12px;border:2px solid var(--border);border-radius:10px;background:var(--card2);color:var(--t2);font-weight:600;font-size:14px;cursor:pointer">🎉 Feiertag</button>
-            <button type="button" class="ma-art-btn" data-art="krank" onclick="setMaArt('krank',this)" style="padding:12px;border:2px solid var(--border);border-radius:10px;background:var(--card2);color:var(--t2);font-weight:600;font-size:14px;cursor:pointer">🤒 Krank</button>
-            <button type="button" class="ma-art-btn" data-art="urlaub-unbezahlt" onclick="setMaArt('urlaub-unbezahlt',this)" style="padding:12px;border:2px solid var(--border);border-radius:10px;background:var(--card2);color:var(--t2);font-weight:600;font-size:14px;cursor:pointer">📋 Unbez. Urlaub</button>
+            <button type="button" class="ma-art-btn active" data-art="arbeit" onclick="setMaArt('arbeit',this)" style="padding:12px;border:2px solid var(--accent);border-radius:10px;background:var(--accent);color:#000;font-weight:700;font-size:14px;cursor:pointer">${t.arbeit}</button>
+            <button type="button" class="ma-art-btn" data-art="urlaub" onclick="setMaArt('urlaub',this)" style="padding:12px;border:2px solid var(--border);border-radius:10px;background:var(--card2);color:var(--t2);font-weight:600;font-size:14px;cursor:pointer">${t.urlaub}</button>
+            <button type="button" class="ma-art-btn" data-art="feiertag" onclick="setMaArt('feiertag',this)" style="padding:12px;border:2px solid var(--border);border-radius:10px;background:var(--card2);color:var(--t2);font-weight:600;font-size:14px;cursor:pointer">${t.feiertag}</button>
+            <button type="button" class="ma-art-btn" data-art="krank" onclick="setMaArt('krank',this)" style="padding:12px;border:2px solid var(--border);border-radius:10px;background:var(--card2);color:var(--t2);font-weight:600;font-size:14px;cursor:pointer">${t.krank}</button>
+            <button type="button" class="ma-art-btn" data-art="urlaub-unbezahlt" onclick="setMaArt('urlaub-unbezahlt',this)" style="padding:12px;border:2px solid var(--border);border-radius:10px;background:var(--card2);color:var(--t2);font-weight:600;font-size:14px;cursor:pointer">${t.unbezUrlaub}</button>
           </div>
         </div>
 
         <!-- Arbeit: Projekt + Zeiten -->
         <div id="ma-z-arbeit-felder">
           <div style="margin-bottom:14px">
-            <label class="fl">Baustelle / Projekt *</label>
+            <label class="fl">${t.baustelle}</label>
             <select class="fs" id="ma-z-proj" style="font-size:16px;width:100%">
               <option value="">— Baustelle wählen —</option>
               ${projOptions}
@@ -5568,7 +5627,7 @@ function renderMaZeiterfassung(maId, filterMonth){
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div>
-            <label class="fl">Von *</label>
+            <label class="fl">${t.von}</label>
             <select class="fs" id="ma-z-von" style="font-size:16px;width:100%" onchange="calcMaStunden()"><option value="">--:--</option>
 <option value="00:00">00:00</option>
 <option value="00:30">00:30</option>
@@ -5621,7 +5680,7 @@ function renderMaZeiterfassung(maId, filterMonth){
 </select>
           </div>
           <div>
-            <label class="fl">Bis *</label>
+            <label class="fl">${t.bis}</label>
             <select class="fs" id="ma-z-bis" style="font-size:16px;width:100%" onchange="calcMaStunden()"><option value="">--:--</option>
 <option value="00:00">00:00</option>
 <option value="00:30">00:30</option>
@@ -5676,20 +5735,20 @@ function renderMaZeiterfassung(maId, filterMonth){
         </div>
 
         <div>
-          <label class="fl">Pause (Minuten)</label>
+          <label class="fl">${t.pause}</label>
           <input type="number" class="fi" id="ma-z-pause" placeholder="z.B. 30" min="0" max="480" step="15" style="font-size:16px" oninput="calcMaStunden()" value="0">
         </div>
 
         <!-- Berechnung -->
         <div id="ma-z-calc" style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:none;text-align:center">
-          <div style="font-size:12px;color:var(--t2);margin-bottom:4px">Arbeitszeit (abzüglich Pause)</div>
+          <div style="font-size:12px;color:var(--t2);margin-bottom:4px">${t.arbeitZeit}</div>
           <div id="ma-z-result" style="font-family:'Bebas Neue',sans-serif;font-size:48px;color:var(--accent);line-height:1">0 h</div>
           <div id="ma-z-detail" style="font-size:12px;color:var(--t2);margin-top:4px"></div>
         </div>
 
         <div>
-          <label class="fl">Notiz</label>
-          <input class="fi" id="ma-z-notiz" placeholder="z.B. Fliesenlegen Bad OG" style="font-size:16px">
+          <label class="fl">${t.notiz}</label>
+          <input class="fi" id="ma-z-notiz" placeholder="${t.notizPlaceholder}" style="font-size:16px">
         </div>
         </div><!-- Ende ma-z-arbeit-felder -->
 
@@ -5702,7 +5761,7 @@ function renderMaZeiterfassung(maId, filterMonth){
         </div>
 
         <button class="btn btn-primary" style="padding:16px;font-size:16px;font-weight:700;border-radius:12px" onclick="saveMaZeit('${maId}')">
-          💾 Speichern
+          ${t.speichern}
         </button>
         <div id="ma-save-msg" style="text-align:center;font-size:14px;min-height:20px;font-weight:600"></div>
       </div>
@@ -5710,15 +5769,15 @@ function renderMaZeiterfassung(maId, filterMonth){
 
     <!-- Monatsübersicht -->
     <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:16px;text-align:center">
-      <div style="font-size:12px;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${monthLabel(activeMonth)}</div>
+      <div style="font-size:12px;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${monthLabel(activeMonth)} · ${t.monatStunden}</div>
       <div style="font-family:'Bebas Neue',sans-serif;font-size:56px;color:var(--accent);line-height:1">${totalH}</div>
-      <div style="font-size:13px;color:var(--t2);margin-top:4px">Stunden erfasst</div>
+      <div style="font-size:13px;color:var(--t2);margin-top:4px">${t.stundenErfasst}</div>
     </div>
 
     <!-- Meine Buchungen mit Monatsfilter -->
     <div style="background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden">
       <div style="padding:13px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--accent)">📋 Meine Buchungen</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--accent)">${t.meineBuchungen}</div>
         <select style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text);font-size:13px;cursor:pointer"
           onchange="renderMaZeiterfassung('${maId}',this.value)">
           ${availMonths.map(m=>`<option value="${m}" ${m===activeMonth?'selected':''}>${monthLabel(m)}</option>`).join('')}
@@ -5741,10 +5800,10 @@ function renderMaZeiterfassung(maId, filterMonth){
           <div style="font-family:'Bebas Neue',sans-serif;font-size:28px;color:var(--accent);flex-shrink:0">${z.std} h</div>
           <button class="del-btn" style="flex-shrink:0" onclick="deleteMaZeit('${zid}','${maId}')">🗑</button>
         </div>`;
-      }).join('') : '<div style="padding:20px;color:var(--t2);text-align:center">Keine Buchungen in diesem Monat</div>'}
+      }).join('') : '<div style="padding:20px;color:var(--t2);text-align:center">'+t.keineBuchungen+'</div>'}
       ${myZeiten.length>1?`<div style="padding:12px 16px;background:var(--card2);border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:13px">
-        <span style="color:var(--t2)">${myZeiten.length} Einträge</span>
-        <span style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--accent)">${totalH} h gesamt</span>
+        <span style="color:var(--t2)">${myZeiten.length} ${t.eintraege}</span>
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:var(--accent)">${totalH} h ${t.gesamt}</span>
       </div>`:''}
     </div>
     <div style="height:60px"></div>
