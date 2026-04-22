@@ -1880,8 +1880,8 @@ function saveProject(){
     odFoto:document.getElementById('f-od-foto').value.trim(),
     notes:document.getElementById('f-notes').value.trim(),
   };
-  p._syncSession=SYNC_SESSION; if(editProjId){const i=projects.findIndex(x=>String(x.id)===String(editProjId));if(i>-1)projects[i]=p;}
-  else projects.unshift(p);
+  p._syncSession=SYNC_SESSION; if(editProjId){const i=projects.findIndex(x=>String(x.id)===String(editProjId));if(i>-1){p._syncSession=SYNC_SESSION;projects[i]=p;}}
+  else { p._syncSession=SYNC_SESSION; projects.unshift(p); }
   closeModal('modal-proj');
   saveAll();renderDashboard();
 }
@@ -2696,7 +2696,7 @@ function openBaufDialog(id){
 
 function doBeauftragen(){
   const p=projects.find(x=>x.id===currentBaufId);if(!p)return;
-  p.typ='laufend';p.prog=0;
+  p.typ='laufend';p.prog=0;p._syncSession=SYNC_SESSION;
   const s=document.getElementById('bauf-start').value;
   const e=document.getElementById('bauf-ende').value;
   const n=document.getElementById('bauf-notiz').value.trim();
@@ -2793,7 +2793,7 @@ function renderProjTodos(){
 
 function toggleTodoProjPage(id){
   const t=todos.find(x=>String(x.id)===String(id)); if(!t)return;
-  t.done=!t.done; saveAll(); renderProjTodos();
+  t.done=!t.done; t._syncSession=SYNC_SESSION; saveAll(); renderProjTodos();
 }
 
 function delTodoProjPage(id){
@@ -2839,8 +2839,8 @@ function saveTodo(){
     due:document.getElementById('td-due').value,
     done:editTodoId?((todos.find(x=>String(x.id)===String(editTodoId))||{}).done||false):false,
   };
-  t._syncSession=SYNC_SESSION; if(editTodoId){const i=todos.findIndex(x=>String(x.id)===String(editTodoId));if(i>-1)todos[i]=t;}
-  else todos.push(t);
+  t._syncSession=SYNC_SESSION; if(editTodoId){const i=todos.findIndex(x=>String(x.id)===String(editTodoId));if(i>-1){t._syncSession=SYNC_SESSION;todos[i]=t;}}
+  else { t._syncSession=SYNC_SESSION; todos.push(t); }
   closeModal('modal-todo');
   saveAll();
   // Seite aktualisieren
@@ -2872,7 +2872,7 @@ function handleFotoUpload(e){
   files.forEach(file=>{
     const reader=new FileReader();
     reader.onload=ev=>{
-      fotos.push({id:Date.now()+'_'+Math.random(),projId:currentFotoProjId,data:ev.target.result,name:file.name,date:today()});
+      fotos.push({id:Date.now()+'_'+Math.random(),projId:currentFotoProjId,data:ev.target.result,name:file.name,date:today(),_syncSession:SYNC_SESSION});
       done++;
       if(done===files.length){saveAll();openDetail(currentFotoProjId);}
     };
@@ -2999,6 +2999,7 @@ function saveRech(){
     notiz:document.getElementById('r-notiz').value.trim(),
     pdfData: currentRechPdfData ? currentRechPdfData.data : null,
     pdfName: currentRechPdfData ? currentRechPdfData.name : null,
+    _syncSession: SYNC_SESSION,
   };
   if(editRechId){
     // String-Vergleich um Typ-Mismatch zu vermeiden
@@ -3006,13 +3007,13 @@ function saveRech(){
     if(i>-1){
       if(!currentRechPdfData && rechnungen[i].pdfData){ r.pdfData=rechnungen[i].pdfData; r.pdfName=rechnungen[i].pdfName; }
       r.id=rechnungen[i].id; // ID-Typ beibehalten
-      rechnungen[i]=r;
+      r._syncSession=SYNC_SESSION; rechnungen[i]=r;
     } else {
       // Fallback: als neue Rechnung anlegen
-      rechnungen.unshift(r);
+      r._syncSession=SYNC_SESSION; rechnungen.unshift(r);
     }
   } else {
-    rechnungen.unshift(r);
+    r._syncSession=SYNC_SESSION; rechnungen.unshift(r);
   }
   editRechId=null;
   currentRechPdfData=null;
@@ -3025,6 +3026,7 @@ function toggleRech(id){
   const r=rechnungen.find(x=>String(x.id)===String(id));if(!r)return;
   r.status=r.status==='bezahlt'?'offen':'bezahlt';
   r.bezam=r.status==='bezahlt'?today():'';
+  r._syncSession=SYNC_SESSION;
   saveAll();renderRechnungen();updateBadges();
 }
 
@@ -3370,12 +3372,12 @@ function saveMA(){
   if(errEl) errEl.textContent='';
 
   const newLohn = parseFloat(document.getElementById('ma-lohn').value)||0;
-  const w={id:editMAId||Date.now(),vorname:vn,nachname:nn,rolle:document.getElementById('ma-rolle').value.trim(),lohn:newLohn,tel:document.getElementById('ma-tel').value.trim(),pin:pin&&/^\d{4}$/.test(pin)?pin:''};
+  const w={id:editMAId||Date.now(),vorname:vn,nachname:nn,rolle:document.getElementById('ma-rolle').value.trim(),lohn:newLohn,tel:document.getElementById('ma-tel').value.trim(),pin:pin&&/^\d{4}$/.test(pin)?pin:'',_syncSession:SYNC_SESSION};
   if(editMAId){
     const i=workers.findIndex(x=>String(x.id)===String(editMAId));
-    if(i>-1) workers[i]=w;
+    if(i>-1){ w._syncSession=SYNC_SESSION; workers[i]=w; }
   } else {
-    workers.push(w);
+    w._syncSession=SYNC_SESSION; workers.push(w);
   }
   closeModal('modal-ma');saveAll();renderMA();
   toast(`✅ ${w.vorname} ${w.nachname} gespeichert — Stundensatz: ${newLohn} €/h`);
@@ -3508,10 +3510,11 @@ function saveZeit(){
     id:editZeitId||Date.now(),
     datum, maId, projId, std,
     zeit:`${von} – ${bis}`,
-    pause, notiz:document.getElementById('z-notiz').value.trim()
+    pause, notiz:document.getElementById('z-notiz').value.trim(),
+    _syncSession:SYNC_SESSION
   };
-  z._syncSession=SYNC_SESSION; if(editZeitId){const i=zeiten.findIndex(x=>String(x.id)===String(editZeitId));if(i>-1)zeiten[i]=z;}
-  else zeiten.unshift(z);
+  z._syncSession=SYNC_SESSION; if(editZeitId){const i=zeiten.findIndex(x=>String(x.id)===String(editZeitId));if(i>-1){z._syncSession=SYNC_SESSION;zeiten[i]=z;}}
+  else { z._syncSession=SYNC_SESSION; zeiten.unshift(z); }
   closeModal('modal-zeit');saveAll();renderZeitList();
 }
 
@@ -4691,7 +4694,7 @@ function savePdfRechnungen(){
     if(nr&&rechnungen.some(x=>x.nr===nr)){
       if(!confirm(`Rechnungsnr. "${nr}" existiert bereits. Trotzdem speichern?`))return;
     }
-    rechnungen.unshift({id:Date.now()+i,nr,datum,projId,betrag,
+    rechnungen.unshift({id:Date.now()+i,nr,datum,projId,betrag,_syncSession:SYNC_SESSION,
       netto:parseFloat(document.getElementById(`pr-netto-${i}`).value)||0,
       mwstSatz:document.getElementById(`pr-mwst-${i}`).value+'%',
       faellig:document.getElementById(`pr-faellig-${i}`)?.value||'',
@@ -4753,7 +4756,7 @@ function saveKat(){
   const name=document.getElementById('kat-name').value.trim();
   if(!name){alert('Bitte Namen eingeben.');return;}
   const k={id:editKatId||Date.now(),name,color:selectedKatColor};
-  if(editKatId){const i=kategorien.findIndex(x=>String(x.id)===String(editKatId));if(i>-1)kategorien[i]=k;}
+  if(editKatId){const i=kategorien.findIndex(x=>String(x.id)===String(editKatId));if(i>-1){k._syncSession=SYNC_SESSION;kategorien[i]=k;}}
   else { k._syncSession=SYNC_SESSION; kategorien.push(k); }
   closeModal('modal-kat');
   saveKatData();renderAllgTodos();
@@ -4801,8 +4804,8 @@ function saveAllgTodo(){
     notiz:document.getElementById('at-notiz').value.trim(),
     done:editAllgTodoId?(allgTodos.find(x=>x.id===editAllgTodoId)?.done||false):false,
   };
-  t._syncSession=SYNC_SESSION; if(editAllgTodoId){const i=allgTodos.findIndex(x=>String(x.id)===String(editAllgTodoId));if(i>-1)allgTodos[i]=t;}
-  else allgTodos.push(t);
+  t._syncSession=SYNC_SESSION; if(editAllgTodoId){const i=allgTodos.findIndex(x=>String(x.id)===String(editAllgTodoId));if(i>-1){t._syncSession=SYNC_SESSION;allgTodos[i]=t;}}
+  else { t._syncSession=SYNC_SESSION; allgTodos.push(t); }
   closeModal('modal-allgtodo');
   saveKatData();renderAllgTodos();
 }
@@ -4810,6 +4813,7 @@ function saveAllgTodo(){
 function toggleAllgTodo(id){
   const t=allgTodos.find(x=>x.id===id);if(!t)return;
   t.done=!t.done;
+  t._syncSession=SYNC_SESSION;
   saveKatData();renderAllgTodos();
 }
 
@@ -4969,9 +4973,9 @@ function saveMaterial(){
     if(i>-1){
       if(!currentMatPdfData&&material[i].pdfData){m.pdfData=material[i].pdfData;m.pdfName=material[i].pdfName;}
       m.id=material[i].id;
-      material[i]=m;
+      m._syncSession=SYNC_SESSION; material[i]=m;
     }
-  } else material.unshift(m);
+  } else { m._syncSession=SYNC_SESSION; material.unshift(m); }
   editMatId=null; currentMatPdfData=null;
   closeModal('modal-material');
   saveAll(); renderMaterial();
