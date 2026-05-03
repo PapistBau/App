@@ -3601,6 +3601,12 @@ function renderWeek(){
 
 // ── AUSWERTUNG ──
 let repAllMonths = false;
+let repProjFilter = 'alle';
+
+function setRepProjFilter(filter){
+  repProjFilter = filter;
+  renderReport();
+}
 
 function setRepMonth(mode){
   repAllMonths = (mode==='all');
@@ -3617,8 +3623,7 @@ function switchRepTab(el, targetId){
 
 function renderReport(){
   const month=document.getElementById('rep-month').value;
-  if(!month&&!repAllMonths) return;
-  const mZ = repAllMonths ? zeiten : zeiten.filter(z=>z.datum.startsWith(month));
+  if(!month&&!repAllMonths) return;const mZ = repAllMonths ? zeiten : zeiten.filter(z=>z.datum.startsWith(month));
   const label = repAllMonths ? 'Gesamt (alle Zeiten)' : month;
 
   // Nur echte Arbeitsstunden für Lohn/Summe
@@ -3750,10 +3755,22 @@ function renderReport(){
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px">
       <div class="rep-card">
-        <div class="rep-ch" style="border-bottom:1px solid var(--border)"><span style="font-size:16px">🏗</span><span style="font-weight:600">Stunden je Projekt</span></div>
+        <div class="rep-ch" style="border-bottom:1px solid var(--border);justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:8px"><span style="font-size:16px">🏗</span><span style="font-weight:600">Stunden je Projekt</span></div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
+            <button class="fpill ${repProjFilter==='alle'?'active':''}" onclick="setRepProjFilter('alle')" style="font-size:11px;padding:4px 10px">Alle</button>
+            <button class="fpill ${repProjFilter==='laufend'?'active':''}" onclick="setRepProjFilter('laufend')" style="font-size:11px;padding:4px 10px">🔵 Laufend</button>
+            <button class="fpill ${repProjFilter==='abgeschlossen'?'active':''}" onclick="setRepProjFilter('abgeschlossen')" style="font-size:11px;padding:4px 10px">✅ Abgeschlossen</button>
+          </div>
+        </div>
         <div class="rep-cb">
-          ${Object.entries(byP2).sort((a,b)=>b[1]-a[1]).map(([pid,h])=>{
-            const p=projects.find(x=>x.id==pid);
+          ${Object.entries(byP2).filter(([pid])=>{
+            if(repProjFilter==='alle') return true;
+            const p=projects.find(x=>String(x.id)===String(pid));
+            if(!p) return repProjFilter==='alle';
+            return p.typ===repProjFilter;
+          }).sort((a,b)=>b[1]-a[1]).map(([pid,h])=>{
+            const p=projects.find(x=>String(x.id)===String(pid));
             const pct=totalH>0?Math.round(h/totalH*100):0;
             const sc=p?SC[p.typ]||SC.laufend:SC.laufend;
             return`<div style="margin-bottom:10px">
